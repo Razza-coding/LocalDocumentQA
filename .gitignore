@@ -1,0 +1,8 @@
+.vscode/*
+InstallOllama/*
+LocalLLM/*
+LocalLLMModels/*
+old_code/*
+dataset/*
+output/*
+temp/*
