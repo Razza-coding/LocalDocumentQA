@@ -1,21 +1,17 @@
 from langchain_community.vectorstores import FAISS
 from langchain_community.docstore.in_memory import InMemoryDocstore
 
-from langchain_core.messages import HumanMessage
-from langchain_core.documents import Document
-from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
-
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_ollama import ChatOllama
+from langchain_core.language_models import BaseChatModel
 
 import faiss
 
-import numpy as np
-
 import json
 import os
+from typing import *
 
-def init_system() -> (...) :
+def init_system(LLM_name='gemma3:4b') -> Tuple[BaseChatModel, FAISS]:
     ''' Build system core objects '''
     # build messages
     f_msg = "Build {0:<10} : {1:<{2}} Complete"
@@ -57,7 +53,7 @@ def init_system() -> (...) :
     )
     print(f_msg.format("VecDB", "FAISS", 10))
 
-    return (LLM_model, VecDB)
+    return LLM_model, VecDB
 
 if __name__ == "__main__":
-    LLM, VecDB = init_system()
+    LLM_model, VecDB = init_system()

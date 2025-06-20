@@ -1,4 +1,6 @@
 .vscode/*
+BanchMark/*
+__pycache__/*
 InstallOllama/*
 LocalVB/*
 LocalLLM/*
@@ -7,3 +9,5 @@ old_code/*
 dataset/*
 output/*
 temp/*
+test_log/*
+PromptTesting/__pycache__/*

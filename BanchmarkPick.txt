@@ -1,0 +1,31 @@
+資訊抽取
+BoolQ
+Belebele
+XQuAD
+
+對話
+SocialIQA
+Natural Questions
+
+常識
+MMLU
+Global-MMLU-Lite
+
+推理
+MBPP
+GSM8K
+
+翻譯
+WMT24++
+
+圖片問答
+VQAv2
+BLINK
+TallyQA
+RealWorldQA
+AI2D
+
+圖表問答
+InfoVQA (val)
+TextVQA (val)
+ChartQA
