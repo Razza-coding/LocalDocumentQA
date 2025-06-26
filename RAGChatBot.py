@@ -5,6 +5,9 @@ import config
 import os
 from typing import *
 
+
+''' 使用 RAG 製作歷史紀錄查詢與上下文整合功能 '''
+
 # initial
 LLM_model, VecDB = config.init_system()
 
