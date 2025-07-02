@@ -1,12 +1,18 @@
 from langchain_core.messages import HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 from langchain_ollama import ChatOllama
-import test_config
-import os
+import os, sys
 from typing import *
 from datetime import date
 from tqdm import tqdm
 import regex as re
+
+# Import parent path
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(parent_dir)
+
+import config # config for Main.py 
+import test_config # config for test enviroment
 
 # Note
 '''
@@ -43,7 +49,7 @@ role_question_prompt  = SystemMessagePromptTemplate.from_template("""你叫做JH
 date_time = date.today().strftime("%Y%m%d")
 encoding = 'utf-8'
 log_model_name =  re.sub(r'[^\w\s.-]', '_', LLM_model_name)
-test_log = os.path.join(os.path.abspath("."), (f"test_log/{date_time}_{log_model_name}_{test_subject}.txt"))
+test_log = os.path.join(os.path.abspath("."), (f"PromptTesting/test_log/{date_time}_{log_model_name}_{test_subject}.txt"))
 with open(test_log, 'w', encoding=encoding) as f:
     f.write(date_time+"\n")
     f.write(f"Roles:\n{roles}\n")

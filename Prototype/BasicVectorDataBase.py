@@ -8,6 +8,12 @@ import numpy as np
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 import json
+import os, sys
+
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(parent_dir)
+
+import config
 
 # 基本設定
 embedding_model_name = "sentence-transformers/all-MiniLM-L6-v2"

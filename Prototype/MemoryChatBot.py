@@ -3,10 +3,13 @@ from langchain_ollama import ChatOllama
 from langchain.chains import ConversationChain
 from langchain.memory import ConversationTokenBufferMemory
 from langchain.callbacks.base import BaseCallbackHandler
+import os, sys
+from datetime import datetime
+
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(parent_dir)
 
 import config
-import os
-from datetime import datetime
 
 ''' 測試 LangChain 的 Memory 功能 '''
 

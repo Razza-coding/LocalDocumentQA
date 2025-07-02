@@ -1,13 +1,20 @@
+# Enviroment files
 .vscode/*
-BanchMark/*
-__pycache__/*
+**/__pycache__/*
+
+# Datasets / Banchmarks
+**/Dataset/*
+
+# Logs / Test output / Temp files
+**/test_log/*
+**/output/*
+**/temp/*
+
+# Abandoned side features
+old_code/*
+
+# Model / Database
 InstallOllama/*
 LocalVB/*
 LocalLLM/*
 LocalLLMModels/*
-old_code/*
-dataset/*
-output/*
-temp/*
-test_log/*
-PromptTesting/__pycache__/*

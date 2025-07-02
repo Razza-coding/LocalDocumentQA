@@ -1,6 +1,3 @@
-# run_tests.py
-# 文字類 Benchmark 自動下載與範例測試流程 (方案 A)
-
 from datasets import load_dataset
 from pathlib import Path
 import random
@@ -8,8 +5,8 @@ import os
 import json
 
 # 設定儲存資料夾
-LOCAL_CACHE = os.path.abspath("./BanchMark")
-LOCAL_HUB_CACHE = os.path.abspath("./BanchMark/Hub")
+LOCAL_CACHE = os.path.abspath("./BanchMark/Dataset")
+LOCAL_HUB_CACHE = os.path.abspath("./BanchMark/Dataset/Hub")
 DATASET_DIR = Path("datasets")
 DATASET_DIR.mkdir(exist_ok=True)
 os.environ['HF_HOME'] = LOCAL_CACHE

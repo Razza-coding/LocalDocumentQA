@@ -1,8 +1,12 @@
 from langchain_core.messages import HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 from langchain_ollama import ChatOllama
+import os, sys
 
-import os
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(parent_dir)
+
+import config
 
 '''
 Upgrade of basic chat bot

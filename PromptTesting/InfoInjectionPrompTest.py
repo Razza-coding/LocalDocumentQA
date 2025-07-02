@@ -1,11 +1,18 @@
 from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 from langchain_ollama import ChatOllama
 import test_config
-import os
+import os, sys
 import json
 import re
 from datetime import date
 from tqdm import tqdm
+
+# Import parent path
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(parent_dir)
+
+import config # config for Main.py 
+import test_config # config for test enviroment
 
 # Init
 LLM_model_name = "gemma3:4b"
@@ -15,7 +22,7 @@ test_subject = "RAG_info_test"
 # Log
 date_time = date.today().strftime("%Y%m%d")
 log_model_name = re.sub(r"[^\w\s.-]", "_", LLM_model_name)
-log_folder = os.path.join(".", "test_log")
+log_folder = os.path.join(".", "PromptTestin/test_log")
 os.makedirs(log_folder, exist_ok=True)
 log_txt_path = os.path.join(log_folder, f"{date_time}_{log_model_name}_{test_subject}.txt")
 
