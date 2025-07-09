@@ -1,105 +1,118 @@
-from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_ollama import ChatOllama
-from langchain.chains import ConversationChain
-from langchain.memory import ConversationTokenBufferMemory
+from langgraph.graph import StateGraph, START
+from langgraph.checkpoint.memory import MemorySaver
+from langchain_core.messages import trim_messages
 from langchain.callbacks.base import BaseCallbackHandler
-import os, sys
+from typing_extensions import TypedDict, Annotated
+from langgraph.graph.message import add_messages
 from datetime import datetime
-
+import os, sys, re
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(parent_dir)
-
 import config
+from LogWriter import LogWriter
 
-''' 測試 LangChain 的 Memory 功能 '''
+# ===============================
+# Config and Initialize
+# ===============================
 
-# ✅ 自訂 callback 來追蹤 LLM 輸入
+LLM_model, _ = config.init_system()
+now = datetime.now().strftime("%Y%m%d_%H%M%S")
+MAX_CONTEXT_WINDOW = 128,000 # maximum token of gemma3:4b
+
+# Log Files
+log_model_name = getattr(LLM_model, "model", "UnknownModel")
+log_model_name = re.sub(r'[^\w\s.-]', '_', log_model_name) # Replace special symbol into underline
+logger = LogWriter(log_name = log_model_name, log_folder_name = "test_log", root_folder = "./Prototype")
+
+# call back for debug logging
 class TraceLLMInputHandler(BaseCallbackHandler):
     def __init__(self):
         self.last_prompt = None
 
+    # log raw LLM input inside LangGraph
     def on_llm_start(self, serialized, prompts, **kwargs):
-        # 只記錄第一組 prompt
         if prompts:
             self.last_prompt = prompts[0]
-            print(f"{'[ Debug ]':<15} | LLM Input:\n{self.last_prompt}")
+            logger.write_log(self.last_prompt, "LLM Input")
 
-# 初始化 LLM 與 Callback
+# hook LLM callback
 callback_handler = TraceLLMInputHandler()
-LLM_model, _ = config.init_system()
 LLM_model.callbacks = [callback_handler]
 
-# Prompt 設定
-all_response_lang  = "繁體中文 English"
-main_response_lang = "繁體中文"
-negitive_rule = "使用簡體中文"
-LLM_name = "JHON"
-role = "專業AI助理"
-task = "協助回答使用者問題"
-style = """
-使用 JSON 格式完成回答
-Summary : 一句話敘述 LLM 打算回覆的內容
-Respond : 你是一名推薦助理，立即推薦使用者一個以上的選擇，不要提問
-Suggestion : 列出一些問題，預測需求使用者並詢問使否執行
-"""
+# ===============================
+# Prompt Setting
+# ===============================
 
-# 建立紀錄檔案
-os.makedirs("test_log", exist_ok=True)
-now = datetime.now().strftime("%Y%m%d_%H%M%S")
-log_model_name = LLM_model.model if hasattr(LLM_model, "model") else "UnknownModel"
-log_file = f"./test_log/{now}_{log_model_name}.txt"
+prompt_vars = {
+    "LLM_name": "JHON",
+    "main_response_lang": "繁體中文 英文 日文",
+    "negitive_rule": "使用簡體中文",
+    "style": '''\nSummary: 一句話簡單回答 Human\nRespond: 你是一名推薦助理，立即推薦 Human 一個以上的選擇，不要提問\nQuestion: 列出一些問題，預測需求 Human 並詢問是否執行'''
+}
 
-# 記憶機制
-memory = ConversationTokenBufferMemory(
-    llm=LLM_model,
-    max_token_limit=4000,
-    return_messages=True
-)
-
-# Prompt 組合
-system_setting_prompt = SystemMessagePromptTemplate.from_template(
-"""你叫做{LLM_name}，是一位{role}，聊天時主要使用{main_response_lang}對話，也可能包含{all_response_lang}，不能{negitive_rule}。
-請用以下格式回答：
-{style}
-"""
-)
-system_prompt = system_setting_prompt.format_messages(
-    LLM_name=LLM_name,
-    role=role,
-    all_response_lang=all_response_lang,
-    main_response_lang=main_response_lang,
-    negitive_rule=negitive_rule,
-    style=style
-)[0].content
-
-chat_prompt = ChatPromptTemplate.from_messages([
-    ("system", system_prompt),
-    ("ai", "{history}"),
-    ("human", "{input}")
+# system setting message + history messages
+prompt_template = ChatPromptTemplate.from_messages([
+    ("system", "You are {LLM_name}, a helpful assistant who speaks {main_response_lang} and avoids {negitive_rule}. Use the following format:{style}"),
+    MessagesPlaceholder(variable_name="messages")
 ])
 
-# ConversationChain
-conversation = ConversationChain(
-    llm=LLM_model,
-    prompt=chat_prompt,
-    memory=memory,
-    verbose=False
+# token trimmer
+trimmer = trim_messages(
+    max_tokens=1024,
+    strategy="last", # "first" "last", what token prioritize to keep
+    token_counter=LLM_model,
+    include_system=True, # keep system message at index 0
+    allow_partial=False, # not allow partial message to send in
+    start_on="human", # combine with strategy last, start with human message
 )
 
-# 啟動對話
-print(f"{'[ LLM_model ]':<15} | Initialize AI Chat Bot")
+# ===============================
+# LangGraph Create
+# ===============================
 
-with open(log_file, "w", encoding="utf-8") as f:
-    while True:
-        user_input = input(f"{'[ User ]':<15} | ")
-        if user_input.lower() == "exit":
-            print(f"[ ChatBot Closed ]")
-            break
+class MessageState(TypedDict):
+    messages: Annotated[list, add_messages]  # Chat History
 
-        response = conversation.predict(input=user_input)
-        print(f"{'[ LLM_model ]':<15} | {response}")
+workflow = StateGraph(state_schema=MessageState)
 
-        # 寫入紀錄（含 prompt）
-        f.write(f"[User]：{user_input}\n")
-        f.write(f"[LLM Input]：{callback_handler.last_prompt}\n")
-        f.write(f"[LLM ]：{response}\n\n")
+# Create Graph Node
+def call_model(state: MessageState):
+    trimmed = trimmer.invoke(state["messages"]) # short memory system, trim message and combine it
+    logger.write_log(trimmed, "History Message")
+    prompt = prompt_template.invoke({**prompt_vars, "messages": trimmed}) # append messages into prompt
+    response = LLM_model.invoke(prompt) # LLM input
+    return {"messages": [response]}
+
+workflow.add_node("chat", call_model)
+workflow.set_entry_point("chat")
+memory = MemorySaver()
+app = workflow.compile(checkpointer=memory)
+
+# ===============================
+# Main Loop
+# ===============================
+
+print(f"{'[ LLM_model ]':<15} | Initialize LangGraph ChatBot")
+config_base = {"configurable": {"thread_id": "session1"}}  # 可動態改變
+
+while True:
+    user_input = input(f"{'[ User ]':<15} | ")
+    if user_input.lower() == "exit":
+        print("[ ChatBot Closed ]")
+        break
+
+    input_messages = [HumanMessage(user_input)]
+    state_input = {"messages": input_messages, "language": "繁體中文"}  # 可加入其他參數
+
+    output = app.invoke(state_input, config_base)
+    ai_response = output["messages"][-1]
+
+    print(f"{'[ LLM_model ]':<15} | {ai_response.content}")
+
+    # logging
+    logger.write_log(user_input, "User")
+    logger.write_log(ai_response.content, "Respond")
+    logger.write_line(2)
