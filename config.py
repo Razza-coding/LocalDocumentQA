@@ -11,23 +11,22 @@ import json
 import os
 from typing import *
 
-def init_system(LLM_name='gemma3:4b') -> Tuple[BaseChatModel, FAISS]:
-    ''' Build system core objects '''
-    # build messages
-    f_msg = "Build {0:<10} : {1:<{2}} Complete"
+def __sys_init_message(build_object_type: str, build_object_name):
+    print(f"Build {build_object_type:<10} : {build_object_name:<20} Complete")
 
+def init_LLM(LLM_model_name='gemma3:4b', LLM_temperature:float=0.7, LLM_url:str="http://localhost:11434"):
+    ''' Initialize LLM model form ollama '''
     # llm
-    LLM_model_name = "gemma3:4b"
-    LLM_temperature = 0.7
-    LLM_url   = "http://localhost:11434"
     LLM_model = ChatOllama(
         model=LLM_model_name,
         temperature=LLM_temperature,
         base_url=LLM_url
     )
-    print(f_msg.format("LLM", LLM_model_name, 10))
+    __sys_init_message("LLM", LLM_model_name)
+    return LLM_model
 
-    # Vector Database
+def init_VecDB():
+    ''' Create FAISS Vector Database '''
     # embeddings of VecDB
     embedding_model_name = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_model_kwargs = {'device': 'cpu'}
@@ -37,12 +36,12 @@ def init_system(LLM_name='gemma3:4b') -> Tuple[BaseChatModel, FAISS]:
         model_kwargs=embedding_model_kwargs,
         encode_kwargs=encode_kwargs
     )
-    print(f_msg.format("Embedding", embedding_model_name, 20))
+    __sys_init_message("VecDB Embeccing", embedding_model_name)
 
     # index of VecDB
     dimension  = len(embeddings.embed_query("foo"))
     vdb_index = faiss.IndexFlatL2(dimension)
-    print(f_msg.format("VDB index", "FlatL2", 10))
+    __sys_init_message("VecDB Index", "Faiss FlatL2")
 
     # 使用 Hugging Face 包裝 VecDB
     VecDB = FAISS(
@@ -51,7 +50,14 @@ def init_system(LLM_name='gemma3:4b') -> Tuple[BaseChatModel, FAISS]:
         docstore=InMemoryDocstore(),
         index_to_docstore_id={}
     )
-    print(f_msg.format("VecDB", "FAISS", 10))
+    __sys_init_message("VecDB", "Faiss")
+    return VecDB
+    
+
+def init_system(LLM_model_name='gemma3:4b') -> Tuple[BaseChatModel, FAISS]:
+    ''' Build system core objects '''
+    LLM_model = init_LLM(LLM_model_name)
+    VecDB = init_VecDB()
 
     return LLM_model, VecDB
 

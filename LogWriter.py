@@ -35,39 +35,62 @@ class LogWriter():
         pass
 
     def __check_file_name_valid(self, file_name: str):
+        ''' Check if string valid for creating file or folder '''
         if re.search(r'[^\w\s.-]', file_name):
-            return False # not valid for creating file or folder
+            return False 
         return True
 
     def remove_special_symbol(self, input: str, replacement: str ='_'):
+        ''' Remove symbol not valid for creating file or folder '''
         return re.sub(r'[^\w\s.-]', replacement, input)
     
     def __raise_string_error(error_str: str):
+        ''' Raise error and show string '''
         raise ValueError(f"String not Valid : {error_str}")
     
-    def write_log(self, log_message: str, message_section: str | None = None, message_end="\n"):
+    def _get_time(self) -> str:
+        ''' Get current time for logging or printing '''
+        return str(datetime.now().strftime("%Y/%m/%d %H:%M:%S.%f"))
+    
+    def write_log(self, log_message: str, message_section: str | None = None, add_time:bool = True, message_end="\n"):
+        ''' 
+        Write a message into log file
+        If message section is given, write down Section Title with a seperate line before writing log message
+        '''
         lf_path = path.join(self.log_folder, self.log_file)
         mode = "a" if path.exists(lf_path) else "w"
         with open(file=lf_path, mode=mode, encoding=self.__encoding) as lf:
             if message_section:
-                lf.write(f"\n[ {message_section} ]\n")
+                if add_time:
+                    time_stamp = f"[ {self._get_time()} ]"
+                else:
+                    time_stamp = ""
+                msg_sec_title = f"\n[ {message_section} ] {time_stamp}\n"
+                lf.write(msg_sec_title)
                 lf.write(self.__s_t_line)
             lf.write(str(log_message) + message_end)
     
-    def write_line(self, line_size: int = 0):
+    def write_s_line(self, line_size: int = 0):
+        ''' Draw a seperate line, line size switches what char is used (-, =, #) '''
         lf_path = path.join(self.log_folder, self.log_file)
         mode = "a" if path.exists(lf_path) else "w"
         line_size = min(line_size, len(self.__s_line_set))
         with open(file=lf_path, mode=mode, encoding=self.__encoding) as lf:
             lf.write(self.__s_line_set[line_size])
+    
+    def write_time(self):
+        ''' Write current time in log file '''
+        self.write_log(f"[ time ] {self._get_time()}")
         
     def __str__(self):
+        ''' return log file path '''
         return str( path.join(self.log_folder, self.log_file))
     
 if __name__ == "__main__":
     writer = LogWriter("test", "test_log")
-    writer.write_line(2)
+    writer.write_s_line(2)
     writer.write_log("create log file success", "CREATE")
     writer.write_log("write log message success", "WRITE")
     writer.write_log("write log message withou section success")
-    writer.write_line(2)
+    writer.write_time()
+    writer.write_s_line(2)
