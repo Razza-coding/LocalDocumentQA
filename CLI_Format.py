@@ -13,6 +13,10 @@ def CLI_input():
     """ Ask User to input something """
     return input(f"{'[ User Input ]':<15} | ")
 
+def CLI_next():
+    """ Print a new line """
+    print("")
+
 if __name__ == "__main__":
     CLI_print("Test Process", "Hello World", "Test Message")
     CLI_input()
