@@ -80,6 +80,7 @@ workflow = StateGraph(state_schema=MessageState)
 
 # Create Graph Node
 def call_model(state: MessageState):
+    print(state["messages"])
     trimmed = trimmer.invoke(state["messages"]) # short memory system, trim message and combine it
     logger.write_log(trimmed, "History Message")
     prompt = prompt_template.invoke({**prompt_vars, "messages": trimmed}) # append messages into prompt
@@ -115,4 +116,4 @@ while True:
     # logging
     logger.write_log(user_input, "User")
     logger.write_log(ai_response.content, "Respond")
-    logger.write_line(2)
+    logger.write_s_line(2)

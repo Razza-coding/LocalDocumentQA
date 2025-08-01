@@ -18,3 +18,4 @@ InstallOllama/*
 LocalVB/*
 LocalLLM/*
 LocalLLMModels/*
+**/prebuild_VDB/*

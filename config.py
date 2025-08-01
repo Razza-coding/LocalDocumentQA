@@ -1,4 +1,4 @@
-from langchain_community.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS, DistanceStrategy
 from langchain_community.docstore.in_memory import InMemoryDocstore
 
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -48,7 +48,7 @@ def init_VecDB():
         embedding_function=embeddings,
         index=vdb_index,
         docstore=InMemoryDocstore(),
-        index_to_docstore_id={}
+        index_to_docstore_id={},
     )
     __sys_init_message("VecDB", "Faiss")
     return VecDB

@@ -5,6 +5,10 @@ import tqdm
 import json
 from datetime import datetime
 
+def remove_special_symbol(input: str, replacement: str ='_'):
+    ''' Remove symbol not valid for creating file or folder '''
+    return re.sub(r'[^\w\s.-]', replacement, input)
+
 class LogWriter():
     def __init__(self, log_name: str, log_folder_name: str | None = None, root_folder: str = ".", encoding: str ='utf-8'):
         # check special symbols in log name / log folder name
@@ -38,11 +42,7 @@ class LogWriter():
         ''' Check if string valid for creating file or folder '''
         if re.search(r'[^\w\s.-]', file_name):
             return False 
-        return True
-
-    def remove_special_symbol(self, input: str, replacement: str ='_'):
-        ''' Remove symbol not valid for creating file or folder '''
-        return re.sub(r'[^\w\s.-]', replacement, input)
+        return True  
     
     def __raise_string_error(error_str: str):
         ''' Raise error and show string '''
@@ -51,6 +51,12 @@ class LogWriter():
     def _get_time(self) -> str:
         ''' Get current time for logging or printing '''
         return str(datetime.now().strftime("%Y/%m/%d %H:%M:%S.%f"))
+    
+    def clear(self):
+        ''' clear all log file content '''
+        lf_path = path.join(self.log_folder, self.log_file)
+        with open(file=lf_path, mode="w", encoding=self.__encoding) as lf:
+            lf.write("")
     
     def write_log(self, log_message: str, message_section: str | None = None, add_time:bool = True, message_end="\n"):
         ''' 

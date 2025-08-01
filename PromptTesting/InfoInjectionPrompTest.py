@@ -22,7 +22,7 @@ test_subject = "RAG_info_test"
 # Log
 date_time = date.today().strftime("%Y%m%d")
 log_model_name = re.sub(r"[^\w\s.-]", "_", LLM_model_name)
-log_folder = os.path.join(".", "PromptTestin/test_log")
+log_folder = os.path.join(".", "PromptTesting/test_log")
 os.makedirs(log_folder, exist_ok=True)
 log_txt_path = os.path.join(log_folder, f"{date_time}_{log_model_name}_{test_subject}.txt")
 
