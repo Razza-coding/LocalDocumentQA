@@ -50,15 +50,16 @@ chat_logger = LogWriter("chat_log", "test_log")
 LLM_debug_logger = LogWriter("LLM_debug", "test_log")
 
 # History message trimmer
-HistoryMessages = [] # history holder, temp class
-# trimmer of combined messages
-main_trimmer = trim_messages(
-    max_tokens=MAX_CONTEXT_WINDOW,
+HistoryMessages = [] # chat history holder
+
+# trimmer of extra knowledge
+knowledge_trimmer = trim_messages(
+    max_tokens=MAX_RETRIEVE_CONTEXT,
     strategy="last",
     token_counter=LLM_model,
-    include_system=True,
+    include_system=False,
     allow_partial=False,
-    start_on="human",
+    start_on="ai",
 )
 # trimmer of history
 history_trimmer = trim_messages(
@@ -210,9 +211,6 @@ def translate_node(state: TranslateState) -> TranslateState:
                     break
             except json.JSONDecodeError:
                 continue 
-        #json_section = json_section.group(0)
-        #format_translate_result = json.loads(json_section)
-        #state["trans_text"] = str(format_translate_result["translate_result"])
     else:
         state["trans_text"] = ""
         # raise ValueError
@@ -295,15 +293,14 @@ def info_retrieve_node(state: DefaultState) -> DefaultState:
     ''' Retrieve infomation in Vector Database '''
     # retrieve data from Database
     search_q = TranslaterBot.invoke(TranslateState(input_text=state["raw_user_input"],trans_lang="English",)).get("trans_text")
-    retrieve_messages, retrieve_scores = vec_db_retrieve(VecDB, search_query=search_q)
+    retrieve_messages, retrieve_scores = vec_db_retrieve(VecDB, search_query=search_q, search_amount=8, score_threshold=1.0)
+    LLM_debug_logger.write_log(search_q, "Search Query")
    
     # log RAG result
-    LLM_debug_logger.write_log("", "Search Query")
-    LLM_debug_logger.write_log(search_q)
-    if len(retrieve_messages) != 0:
-        LLM_debug_logger.write_log("", "Retrieve Messages")
-        for m, s in zip(retrieve_messages, retrieve_scores):
-            LLM_debug_logger.write_log(f"{m.type} {str(s)} : {str(m)}")
+    retrieved_msg_log = ""
+    for m, s in zip(retrieve_messages, retrieve_scores):
+        retrieved_msg_log += f"{m.type :<5} {str(s) :<5} : {str(m) :<}\n"
+    LLM_debug_logger.write_log(retrieved_msg_log, "Retrieve Messages")
 
     return {"extra_info_msg" : retrieve_messages}
 
@@ -323,12 +320,13 @@ def LLM_reply_node(state: DefaultState) -> DefaultState:
     history_msg = make_chat_history_prompt(ChatHistoryTemplateInputMessages(chat_history=trimmed_msg))
 
     # get knowledge message
-    knowledge_msg = get_knowledge_message(KnowledgeTemplateInputMessages(knowlegde_messages=state["extra_info_msg"]))
+    trimmed_knowledge_message = knowledge_trimmer.invoke(state["extra_info_msg"])
+    knowledge_msg = get_knowledge_message(KnowledgeTemplateInputMessages(knowlegde_messages=trimmed_knowledge_message))
 
-    # Log history input
-    LLM_debug_logger.write_log("", "Chat History", add_time=False)
-    for m in trimmed_msg:
-        LLM_debug_logger.write_log(f"{m.type} : {str(m)}") # list all history
+    # Log history
+    history_msg_log = [f"{m.type :<5} : {str(m) :<}" for m in trimmed_msg]
+    LLM_debug_logger.write_log('\n'.join(history_msg_log), "Chat History", add_time=False)
+    
     # make input
     LLM_input = make_general_input(GeneralChatTemplateInputMessages(
         system_message    = state["system_msg"],
@@ -386,32 +384,33 @@ ChatBot = BuildGraph.compile(checkpointer=GraphMemory)
 # ===============================
 # Start the Chat Bot
 
-# Hello Message
-initial_input = "現在使用者剛開啟系統，請 AI 聊天機器人對使用者自我介紹一下"
-response = ChatBot.invoke(StartState(raw_user_input=initial_input, system_setting=system_setting), chat_bot_config)
+if __name__ == "__main__":
+    # Hello Message
+    initial_input = "現在使用者剛開啟系統，請 AI 聊天機器人對使用者自我介紹一下"
+    response = ChatBot.invoke(StartState(raw_user_input=initial_input, system_setting=system_setting), chat_bot_config)
 
-CLI_print("Chat Bot", response["output_msg"].content, "Initialize AI Chat Bot")
+    CLI_print("Chat Bot", response["output_msg"].content, "Initialize AI Chat Bot")
 
-# main chat loop
-while True:
+    # main chat loop
+    while True:
 
-    # input
-    raw_user_input = CLI_input()
+        # input
+        raw_user_input = CLI_input()
 
-    # close system
-    if raw_user_input.lower() == "exit":
-        break
-    
-    # invoke LLM
-    response = ChatBot.invoke(StartState(raw_user_input=raw_user_input, system_setting=system_setting), chat_bot_config)
-    
-    # reply
-    answer = response["output_msg"].content
-    CLI_print("AI Chat Bot", answer)
+        # close system
+        if raw_user_input.lower() == "exit":
+            break
+        
+        # invoke LLM
+        response = ChatBot.invoke(StartState(raw_user_input=raw_user_input, system_setting=system_setting), chat_bot_config)
+        
+        # reply
+        answer = response["output_msg"].content
+        CLI_print("AI Chat Bot", answer)
 
-    # Log chat
-    chat_logger.write_s_line(2)
-    chat_logger.write_log(raw_user_input, "User Input")
-    chat_logger.write_log(answer, "AI Response")
+        # Log chat
+        chat_logger.write_s_line(2)
+        chat_logger.write_log(raw_user_input, "User Input")
+        chat_logger.write_log(answer, "AI Response")
 
-CLI_print("System", "Good Bye", "Close System")
+    CLI_print("System", "Good Bye", "Close System")
