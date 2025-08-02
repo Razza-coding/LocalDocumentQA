@@ -3,11 +3,21 @@ from os import path
 import re
 import tqdm
 import json
+import rich
+from rich.console import Console
+from io import StringIO
 from datetime import datetime
 
 def remove_special_symbol(input: str, replacement: str ='_'):
     ''' Remove symbol not valid for creating file or folder '''
     return re.sub(r'[^\w\s.-]', replacement, input)
+
+def add_concole_style(input: str) -> str: 
+    ''' Use rich to render a styled print-like string from a single line of text (without printing to console) '''
+    output_buffer = StringIO()
+    console = Console(file=output_buffer, record=True)
+    console.print(input)
+    return str(output_buffer.getvalue())
 
 class LogWriter():
     def __init__(self, log_name: str, log_folder_name: str | None = None, root_folder: str = ".", encoding: str ='utf-8'):
@@ -74,7 +84,7 @@ class LogWriter():
                 msg_sec_title = f"\n[ {message_section} ] {time_stamp}\n"
                 lf.write(msg_sec_title)
                 lf.write(self.__s_t_line)
-            lf.write(str(log_message) + message_end)
+            lf.write(add_concole_style(log_message + message_end))
     
     def write_s_line(self, line_size: int = 0):
         ''' Draw a seperate line, line size switches what char is used (-, =, #) '''
@@ -94,9 +104,10 @@ class LogWriter():
     
 if __name__ == "__main__":
     writer = LogWriter("test", "test_log")
+    writer.clear()
     writer.write_s_line(2)
     writer.write_log("create log file success", "CREATE")
     writer.write_log("write log message success", "WRITE")
-    writer.write_log("write log message withou section success")
+    writer.write_log("write log message without section success")
     writer.write_time()
     writer.write_s_line(2)

@@ -131,7 +131,7 @@ class LLM_input_monitor(BaseCallbackHandler):
     
     def on_llm_start(self, serialized, prompts, *, run_id, parent_run_id = None, tags = None, metadata = None, **kwargs):
         if prompts:
-            LLM_debug_logger.write_log(prompts, "LLM input", add_time=True)
+            LLM_debug_logger.write_log('\n'.join(prompts), "LLM input", add_time=True)
         return super().on_llm_start(serialized, prompts, run_id=run_id, parent_run_id=parent_run_id, tags=tags, metadata=metadata, **kwargs)
     
     def on_llm_end(self, response, *, run_id, parent_run_id = None, **kwargs):
