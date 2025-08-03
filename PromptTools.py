@@ -27,8 +27,7 @@ Prompt Tools
 default_chat_lang      = "繁體中文 English 日文"
 defualt_negitive_rule  = "使用簡體中文"
 default_output_format  = """
-Write a small friendly artical.
-Start by writing one sentence, inform user what you think.
+Write a small friendly artical, start by writing one sentence, inform user what you think.
 And then, depend on what user ask, provide atleast one option they can choice without asking more questions.
 Finally, ask more detail about the user's question if needed, or provide some option user might want to do next.
 """
@@ -99,16 +98,14 @@ class SystemTemplateInputVar(TypedDict):
 
 system_template = SystemMessagePromptTemplate.from_template(
     (
-        "<System setting>"
-        "Your name is {AI_name}，you're a {professional_role}.\n"
+        "<System Setting>\n"
+        "Your name is {AI_name}, you're a {professional_role}.\n"
         "Uses {chat_lang} to communicate with user while avoiding violate {negitive_rule}.\n"
-        "System will give you useful imformation or knowledge that helps you reply, here are some sections:"
-        " - Chat History section is record of User and AI chat bot's Messages."
-        " - Additional Knowledge section is data from books, documents or facts."
-        "</System setting>"
-        "<Instructions>"
-        "Reply your response to user with this output format:\n{output_format}\n"
-        "</Instructions>"
+        "System will give you useful information that helps you understand what user mean, for example:\n"
+        " - Chat History section is record of User and AI chat bot's Messages, ai can use it to understand what user mean.\n"
+        " - Additional Knowledge section is data from books, documents or facts, ai can reply with reliable source.\n"
+        "{output_format}\n"
+        "<End of System Setting>\n\n"
     )
 )
 
@@ -128,7 +125,7 @@ def get_system_message(input_variables: SystemTemplateInputVar) -> BaseMessage:
 class UserTemplateInputVar(TypedDict):
     raw_user_input: str
 
-user_template = HumanMessagePromptTemplate.from_template("<User>:\n{raw_user_input}")
+user_template = HumanMessagePromptTemplate.from_template("<User>:{raw_user_input}")
 
 def get_user_message(input_variables: UserTemplateInputVar) -> BaseMessage:
     ''' Get message by filling placeholders '''
@@ -188,7 +185,7 @@ def get_translate_verify_message(intput_variables: TranslateVerifyTemplateInputV
 class ChatHistoryTemplateInputMessages(TypedDict):
     chat_history: List[BaseMessage]
 
-history_template = AIMessagePromptTemplate.from_template("<History Chat>\n{chat_history_chunk}</History Chat>")
+history_template = AIMessagePromptTemplate.from_template("These are past Chat History : \n{chat_history_chunk}")
 
 def make_chat_history_prompt(input_variables: ChatHistoryTemplateInputMessages) -> BaseMessage:
     ''' Creates Chat History Section for part of input prompt '''
@@ -198,10 +195,11 @@ def make_chat_history_prompt(input_variables: ChatHistoryTemplateInputMessages) 
     assert chat_history is not None
     
     # assamble individual message into a string chunk
-    chat_history_chunk = ""
-    msg_frame ="{m_type} : {m_content}\n"
+    chat_history_chunk = "[ "
+    msg_frame ="{m_type} : {m_content},\n"
     for msg in chat_history:
         chat_history_chunk += msg_frame.format(m_type=msg.type, m_content=msg.text())
+    chat_history_chunk += " ]"
     
     return history_template.format_messages(**{"chat_history_chunk" : chat_history_chunk})
 
@@ -209,8 +207,8 @@ def make_chat_history_prompt(input_variables: ChatHistoryTemplateInputMessages) 
 # General input template
 class GeneralChatTemplateInputMessages(TypedDict):
     system_message    : SystemMessage
-    history_message   : Optional[AIMessage]
-    knowledge_message : Optional[AIMessage]
+    history_message   : Optional[SystemMessage]
+    knowledge_message : Optional[SystemMessage]
     user_message      : HumanMessage
 
 general_input_template = ChatPromptTemplate.from_messages([
@@ -244,7 +242,7 @@ def make_general_input(input_messages: GeneralChatTemplateInputMessages) -> List
 class KnowledgeTemplateInputMessages(TypedDict):
     knowlegde_messages: List[AIMessage]
 
-knowledge_template = AIMessagePromptTemplate.from_template("<Additional Knowledge>\n{all_knowledge_messages}<\Additional Knowledge>")
+knowledge_template = AIMessagePromptTemplate.from_template("These are some Additional Knowledge : \n{all_knowledge_messages}")
 
 def get_knowledge_message(input_variables: KnowledgeTemplateInputMessages) -> BaseMessage:
     ''' To be added '''
@@ -253,10 +251,11 @@ def get_knowledge_message(input_variables: KnowledgeTemplateInputMessages) -> Ba
         input_variables["knowlegde_messages"] = [empty_knowledge_filler]
 
     # Combine all knowledge
-    message_frame = "\t<knowledge {knowledge_idx}> {knowledge_content}\n"
-    all_knowledge_message = ""
+    message_frame = "\tinfo_{knowledge_idx} : {knowledge_content}\n"
+    all_knowledge_message = "[ "
     for idx, msg in enumerate(input_variables["knowlegde_messages"]):
         all_knowledge_message += message_frame.format(knowledge_idx=idx+1, knowledge_content=msg.text())
+    all_knowledge_message += " ]"
 
     # Assamble
     return knowledge_template.format_messages(**{"all_knowledge_messages" : all_knowledge_message})
@@ -296,18 +295,35 @@ if __name__ == "__main__":
     CLI_print("Prompt Testing", user_msg, "Make User Message")
     CLI_next()
     # test history message
-    test_history_msg = [AIMessage("Initialize system"), HumanMessage("Hello"), AIMessage("Hello, what can I help?")]
+    test_history_msg = [AIMessage("Initialize system"), HumanMessage("Hello"), AIMessage("Hello, what can I help?"), HumanMessage("Suggest me newest smart phone under 10,000 NTW"),]
     history_msg = make_chat_history_prompt(ChatHistoryTemplateInputMessages(
         chat_history=test_history_msg
     ))
     CLI_print("Prompt Testing", history_msg, "Make History Message")
     CLI_next()
+    # test knowledge message
+    test_knowledge_msg = get_knowledge_message(KnowledgeTemplateInputMessages(
+        knowlegde_messages=[AIMessage("1 + 1 = 2"), AIMessage("2 + 2 = 4"), AIMessage("4 + 4 = 8")]
+    ))
+    CLI_print("Knowledge Messages", test_knowledge_msg, "Make knowledge Message")
+    CLI_next()
     # test general input
     LLM_input = make_general_input(GeneralChatTemplateInputMessages(
-        system_message= system_msg,
-        user_message= user_msg
+        system_message=system_msg,
+        user_message=user_msg
+    ))
+    CLI_print("Prompt Testing", LLM_input, "Make LLM input without history or knowledge message")
+    CLI_next()
+    LLM_input = make_general_input(GeneralChatTemplateInputMessages(
+        system_message=system_msg,
+        history_message=history_msg,
+        knowledge_message=test_knowledge_msg,
+        user_message=user_msg,
     ))
     CLI_print("Prompt Testing", LLM_input, "Make LLM input")
+    CLI_next()
+    LLM_input_expanded = '\n'.join([f"{m.type} : [ \n{m.content}\n ]" for m in LLM_input.messages])
+    CLI_print("Prompt Testing", LLM_input_expanded, "Content inside LLM input")
     CLI_next()
     # test RAG message
     RAG_summary_prompt = make_RAG_summary_prompt(RAGSummaryChatTemplateInputMessages(
@@ -323,12 +339,5 @@ if __name__ == "__main__":
     ))
     CLI_print("Translate Testing", translation_request_prompt, "Make translate Request")
     CLI_next()
-    # test knowledge message
-    knowledge_messages = get_knowledge_message(KnowledgeTemplateInputMessages(
-        knowlegde_messages=[AIMessage("1 + 1 = 2"), AIMessage("2 + 2 = 4"), AIMessage("4 + 4 = 8")]
-    ))
-    CLI_print("Knowledge Messages", knowledge_messages, "Display Expanded knowledge")
-    CLI_next()
-
 
     CLI_print("Prompt Testing", "End")
