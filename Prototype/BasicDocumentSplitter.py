@@ -8,6 +8,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, PromptTemplate, HumanMessagePromptTemplate
 from langchain.output_parsers import PydanticOutputParser
+from agentic_chunker import AgenticChunker
 import os, sys
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(parent_dir)
@@ -17,10 +18,11 @@ from config import init_LLM, build_embedding
 '''
 Prototype for testing different text split method
 Split Methods:
- - fix size / manual split
- - char split
- - semetic
+ - Fix size / Manual Split
+ - Recursive Char Split
+ - Semetic
  - LLM based
+ - Agentic grouping
 
 Source:
  - https://github.com/FullStackRetrieval-com/RetrievalTutorials/blob/main/tutorials/LevelsOfTextSplitting/5_Levels_Of_Text_Splitting.ipynb
@@ -113,6 +115,11 @@ logger.write_log(documents)
 # ===============================
 # 2. Recursive Character Text Splitting
 # Use target separators to split chunks, LangChain default symbol is ["\n\n", "\n", " ", ""]
+# Steps:
+#  - Split by "\n\n"
+#  - Check chunk size
+#  - Split by "\n"
+#  - continue till all chunk size is small enough or all symbol is used
 # Separators can be customized
 chunk_size = 450
 overlap = 0
@@ -123,7 +130,7 @@ logger.write_log(text_splitter.create_documents([file_text]), "Recursive Charact
 
 # ===============================
 # 3. Document Specific Splitting
-logger.write_log("", "Document Specific Splitting")
+logger.write_log("", "")
 
 # -------------------------------
 # Document Specific Splitting - Markdown
@@ -133,7 +140,7 @@ chunk_size = 40
 overlap = 0
 #
 splitter = MarkdownTextSplitter(chunk_size=chunk_size, chunk_overlap=overlap)
-logger.write_log(splitter.create_documents([markdown_text]))
+logger.write_log(splitter.create_documents([markdown_text]), "Document Specific Splitting - MarkDown")
 
 # -------------------------------
 # Document Specific Splitting - Python
@@ -143,7 +150,7 @@ chunk_size = 100
 overlap = 0
 #
 python_splitter = PythonCodeTextSplitter(chunk_size=chunk_size, chunk_overlap=overlap)
-logger.write_log(python_splitter.create_documents([python_text]))
+logger.write_log(python_splitter.create_documents([python_text]), "Document Specific Splitting - Python")
 
 # -------------------------------
 # Document Specific Splitting - Javascript
@@ -155,7 +162,7 @@ overlap = 0
 js_splitter = RecursiveCharacterTextSplitter.from_language(
     language=Language.JS, chunk_size=chunk_size, chunk_overlap=overlap
 )
-logger.write_log(js_splitter.create_documents([javascript_text]))
+logger.write_log(js_splitter.create_documents([javascript_text]), "Document Specific Splitting - JavaScript")
 
 
 # ===============================
@@ -165,7 +172,6 @@ logger.write_log(js_splitter.create_documents([javascript_text]))
 #  - and then any difference greater than the X percentile is split
 
 from langchain_experimental.text_splitter import SemanticChunker
-from langchain_openai.embeddings import OpenAIEmbeddings
 #
 breakpoint_threshold_type="percentile"  # "standard_deviation", "interquartile"
 #
@@ -181,17 +187,15 @@ logger.write_log(documents, "Semantic Chunking")
 
 # -------------------------------
 # Proposition-Based Chunking
+#
 # After splitting text into paragraphs (either semantic chunking or recursive chunking), further splits the paragraphs with AI Agent
 # Creates smaller, multipile sentence that have meaning by itself
 # https://arxiv.org/pdf/2312.06648.pdf
 
-from langchain.output_parsers.openai_tools import JsonOutputToolsParser
-from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnableLambda
 from langchain import hub
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import List
 
 # https://smith.langchain.com/hub/wfh/proposal-indexing?organizationId=65e2223e-316a-5256-b012-5033801a97fa
 proposal_indexing_template = ChatPromptTemplate.from_messages([
@@ -250,76 +254,48 @@ Text:
 {input}
 """
 )
+
+# Create Proposition Extraction Function
 class Sentences(BaseModel):
     sentences: List[str]
-
-# Extraction
 parser = PydanticOutputParser(pydantic_object=Sentences)
-#agent_chunking_runnable = proposal_indexing_template | local_llm
 obj = hub.pull("wfh/proposal-indexing") # same template as proposal_indexing_template
 llm_chunking_runnable = obj | local_llm
-extraction_runnable = extraction_prompt | local_llm | parser
-
+fact_extraction_runnable = extraction_prompt | local_llm | parser
 def get_propositions(text):
-    unextracted_chunk = llm_chunking_runnable.invoke({"input": text}).content
+    # LLM list out some facts in text, but yet to be format
+    unformated_chunk = llm_chunking_runnable.invoke({"input" : text}).content
     try:
-        propositions = extraction_runnable.invoke({"input" : unextracted_chunk}).sentences
+        # extract formated data from string
+        propositions = fact_extraction_runnable.invoke({"input" : unformated_chunk}).sentences
     except:
         # fall back, put unextracted_chunk for debug
-        propositions = [unextracted_chunk]
+        propositions = [unformated_chunk]
     return propositions
 
-#
+# Use Recursive Splitter, then use LLM to execute Proposition-Based Chunking
 chunk_size = 450
 overlap = 0
 #
 text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=overlap)
 paragraphs = text_splitter.split_text(file_text)
+# Extract Propositions
 text_propositions = []
-for i, para in enumerate(paragraphs[:5]):
+for i, para in enumerate(paragraphs[:10]):
     propositions = get_propositions(para)
     text_propositions.extend(propositions)
     print(f"Done with {i}")
-
+#
 logger.write_log(f"You have {len(text_propositions)} propositions", "Proposition-Based Chunking")
 logger.write_log(text_propositions)
 
 
 # -------------------------------
 #  Agent Grouping
-# TO BE ADDED
-
-'''
-def rag(chunks, collection_name):
-    vectorstore = Chroma.from_documents(
-        documents=documents,
-        collection_name=collection_name,
-        embedding=embeddings.ollama.OllamaEmbeddings(model='nomic-embed-text'),
-    )
-    retriever = vectorstore.as_retriever()
-
-    prompt_template = """Answer the question based only on the following context:
-    {context}
-    Question: {question}
-    """
-    prompt = ChatPromptTemplate.from_template(prompt_template)
-
-    chain = (
-        {"context": retriever, "question": RunnablePassthrough()}
-        | prompt
-        | local_llm
-        | StrOutputParser()
-    )
-    result = chain.invoke("What is the use of Text Splitting?")
-    print(result)
-
-
-ac = AgenticChunker()
+# Use LLM to group proposition together by similarity, create a group if no match found
+ac = AgenticChunker(llm=local_llm)
 ac.add_propositions(text_propositions)
-print(ac.pretty_print_chunks())
 chunks = ac.get_chunks(get_type='list_of_strings')
-print(chunks)
-documents = [Document(page_content=chunk, metadata={"source": "local"}) for chunk in chunks]
-rag(documents, "agentic-chunks")
-'''
 
+logger.write_log(ac.pretty_print_chunks(), "Agent Grouping")
+logger.write_log(chunks)

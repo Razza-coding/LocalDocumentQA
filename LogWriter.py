@@ -84,7 +84,7 @@ class LogWriter():
                 msg_sec_title = f"\n[ {message_section} ] {time_stamp}\n"
                 lf.write(msg_sec_title)
                 lf.write(self.__s_t_line)
-            lf.write(add_concole_style(log_message + message_end))
+            lf.write(add_concole_style(log_message) + message_end)
     
     def write_s_line(self, line_size: int = 0):
         ''' Draw a seperate line, line size switches what char is used (-, =, #) '''
