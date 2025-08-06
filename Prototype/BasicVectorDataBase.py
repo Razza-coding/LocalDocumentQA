@@ -38,7 +38,8 @@ vector_store = FAISS(
 )
 
 '''
-備註：原生 faiss 不包含文件儲存與文件對應，但 Hugging Face 版有封裝高階功能
+Self Note:
+原生 faiss 不包含文件儲存與文件對應，但 Hugging Face 版有封裝高階功能
 但是這不代表原本 faiss 功能可以不學習，從 HF FAISS 抽取 index 使用時就是用 faiss 函式操作
 HF FAISS 內部包含(以下假設文件是目標資料)：
 1. embedding : 文件轉向量

@@ -87,7 +87,7 @@ def vec_db_store(vector_database:FAISS, message:BaseMessage) -> None:
     ''' put message context into vector database '''
     vector_database.add_texts(texts=[f"{message.content}"])
 
-def vec_db_retrieve(vector_database:FAISS, search_query:str, search_amount:int=4, score_threshold:int=1.2):
+def vec_db_retrieve(vector_database:FAISS, search_query:str, search_amount:int=4, score_threshold:float=1.2):
     ''' retrieve message from vector database '''
     retrieve_messages = []
     retrieve_scores   = []
