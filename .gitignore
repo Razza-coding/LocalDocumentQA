@@ -1,6 +1,7 @@
 # Enviroment files
 .vscode/*
 **/__pycache__/*
+*req*
 
 # Datasets / Banchmarks
 **/Dataset/*

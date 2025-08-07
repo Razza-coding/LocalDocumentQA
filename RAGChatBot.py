@@ -1,4 +1,5 @@
 from langchain_core.messages import trim_messages, HumanMessage, AIMessage, SystemMessage, BaseMessage
+from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate, AIMessagePromptTemplate, MessagesPlaceholder, BasePromptTemplate
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_ollama import ChatOllama
@@ -87,21 +88,20 @@ def vec_db_store(vector_database:FAISS, message:BaseMessage) -> None:
     ''' put message context into vector database '''
     vector_database.add_texts(texts=[f"{message.content}"])
 
-def vec_db_retrieve(vector_database:FAISS, search_query:str, search_amount:int=4, score_threshold:float=1.2):
+def vec_db_retrieve(vector_database:FAISS, search_query:str, search_amount:int=4, score_threshold:float=1.2) -> List[Optional[Document]]:
     ''' retrieve message from vector database '''
     retrieve_messages = []
-    retrieve_scores   = []
     if vector_database.index.ntotal > 1: # check if database contians data
-        retrieve_data = vector_database.similarity_search_with_score(query=search_query, k=search_amount)
-        # Transform into AI Message Class
-        for text, score in retrieve_data:
-            if score > score_threshold: # score filter
-                continue
-            text_id = text.id
-            test_score = score
-            retrieve_messages.append(AIMessage(content=text.page_content))
-            retrieve_scores.append(score)
-    return retrieve_messages, retrieve_scores
+        if score_threshold is None:
+            retrieve_data = vector_database.similarity_search_with_score(search_query, search_amount)
+        else:
+            score_threshold = min(1, max(score_threshold, 0))
+            retrieve_data = vector_database.similarity_search_with_score(search_query, search_amount, score_threshold=score_threshold)
+        # Append retrieve score into document
+        for doc, score in retrieve_data:
+            doc.metadata.update({"retrieve score" : score})
+            retrieve_messages.append(doc)
+    return retrieve_messages
 
 def vec_db_build_from_file(vector_database:FAISS, file:str):
     ''' fills database with data from txt file '''
@@ -293,16 +293,18 @@ def info_retrieve_node(state: DefaultState) -> DefaultState:
     ''' Retrieve infomation in Vector Database '''
     # retrieve data from Database
     search_q = TranslaterBot.invoke(TranslateState(input_text=state["raw_user_input"],trans_lang="English",)).get("trans_text")
-    retrieve_messages, retrieve_scores = vec_db_retrieve(VecDB, search_query=search_q, search_amount=8, score_threshold=1.0)
+    #retrieve_messages, retrieve_scores = vec_db_retrieve(VecDB, search_query=search_q, search_amount=8, score_threshold=1.0)
+    retrieve_documents = vec_db_retrieve(VecDB, search_query=search_q, search_amount=8, score_threshold=1.0)
     LLM_debug_logger.write_log(search_q, "Search Query")
    
     # log RAG result
     retrieved_msg_log = ""
-    for m, s in zip(retrieve_messages, retrieve_scores):
-        retrieved_msg_log += f"{m.type :<5} {str(s) :<5} : {str(m) :<}\n"
+    for doc in retrieve_documents:
+        retrieved_msg_log += f"ID : {str(doc.id) :<30} Score : {str( doc.metadata.get('retrieve score') ) :<5}\n{str(doc.page_content) :<}\n\n"
     LLM_debug_logger.write_log(retrieved_msg_log, "Retrieve Messages")
 
-    return {"extra_info_msg" : retrieve_messages}
+    retrieve_msg = [AIMessage(content=doc.page_content) for doc in retrieve_documents] # turns Document into AIMessage
+    return {"extra_info_msg" : retrieve_msg}
 
 def info_store_node(state: DefaultState) -> DefaultState:
     ''' Store message in Vector Database '''
