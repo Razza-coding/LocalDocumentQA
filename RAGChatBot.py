@@ -7,6 +7,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.language_models import BaseChatModel
 
 from langgraph.graph import StateGraph, START, END
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 from langgraph.checkpoint.memory import MemorySaver
@@ -237,8 +238,15 @@ def verify_node(state: TranslateState) -> TranslateState:
     
     # use LLM to check translate result
     verify_prompt = get_translate_verify_message(TranslateVerifyTemplateInputVar(trans_lang=state["trans_lang"], orignal_text=state["input_text"], translate_text=state["trans_text"]))
-    LLM_verify = to_text(LLM_model.invoke(verify_prompt))
-    yes_or_no = re.search(r"\[.*?\]", LLM_verify, re.DOTALL).group(0)
+    LLM_verify = to_text(LLM_model.invoke(input=verify_prompt))
+    # execute different extract method, how it works depends on how smart llm is
+    match_dict = re.search(r"\{.*?\}", LLM_verify, re.DOTALL) # target example: { "verify_result" : YES }
+    match_dict = match_dict.group(0) if match_dict else ""
+    match_list = re.search(r"\[.*?\]", LLM_verify, re.DOTALL) # target example: { "verify_result" : [YES] }
+    match_list = match_list.group(0) if match_list else ""
+
+    yes_or_no = match_dict if match_dict else match_list
+    #
     if "yes" in yes_or_no.lower():
         state["_correct_translation"] = True
     else:
@@ -382,6 +390,16 @@ BuildGraph.add_edge("info_retrieve_node", "reply_node")
 BuildGraph.add_edge("reply_node", "end_node")
 #BuildGraph.add_edge("info_store_node", "end_node")
 ChatBot = BuildGraph.compile(checkpointer=GraphMemory)
+
+class PackedGraph:
+    def __init__(self, graph:CompiledStateGraph):
+        self.graph = graph
+        pass
+
+    def invoke(self, input:str):
+        return self.graph.invoke(StartState(raw_user_input=input, system_setting=system_setting), chat_bot_config)
+
+Packed = PackedGraph(ChatBot)
 
 # ===============================
 # Start the Chat Bot

@@ -25,7 +25,7 @@ def init_LLM(LLM_model_name='gemma3:4b', LLM_temperature:float=0.7, LLM_url:str=
     __sys_init_message("LLM", LLM_model_name)
     return LLM_model
 
-def build_embedding(model_name: str="sentence-transformers/all-MiniLM-L6-v2", model_device: str="cpu", normalize_embeddings: bool=True):
+def build_embedding(model_name: str="sentence-transformers/all-MiniLM-L6-v2", model_device: str="cpu", normalize_embeddings: bool=True) -> HuggingFaceEmbeddings:
     ''' Simplified Sentence Embedding Builder '''
     embeddings = HuggingFaceEmbeddings(model_name=model_name, model_kwargs={'device': model_device}, encode_kwargs={'normalize_embeddings': normalize_embeddings})
     __sys_init_message("Embedding Model", model_name)
