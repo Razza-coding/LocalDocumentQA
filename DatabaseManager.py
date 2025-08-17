@@ -3,7 +3,7 @@ from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
 import faiss
 import rich
-import os, sys
+import os, sys, ast
 from typing import *
 from config import init_VecDB
 from CLI_Format import *
@@ -22,18 +22,40 @@ class VDBManager:
         # FAISS
         self.VDB: FAISS = VDB 
         pass
+
+    def amount(self) -> int:
+        ''' Amount of Data in Database '''
+        return self.VDB.index.ntotal
     
-    def load(self, folder_path: str, index_name:str):
-        ''' Load form prebuild VDB file '''
+    def load(self, folder_path: str, index_name:str) -> bool:
+        ''' Load form prebuild VDB file, return True if load success, False otherwise '''
         folder_path = os.path.abspath(folder_path)
         if not os.path.exists(folder_path) or not os.path.isdir(folder_path):
-            raise (OSError, f"Path Invalid, required folder path: {folder_path}")
+            rich.print(f"Path Invalid, required folder path: {folder_path}")
+            return False
         self.VDB = self.VDB.load_local(folder_path, embeddings=self.VDB.embedding_function, index_name=index_name, allow_dangerous_deserialization=True)
-        rich.print(f"Load {self.VDB.index.ntotal} data from folder: {folder_path}")
+        rich.print(f"Load {self.VDB.index.ntotal} data from pre-build VDB: {os.path.join(folder_path, index_name)}")
+        return True
 
     def save(self, folder_path:str, index_name:str='index'):
         ''' Save VDB content '''
         self.VDB.save_local(folder_path, index_name)
+    
+    def load_from_file(self, file_path:str):
+        ''' load data from file textline into database, textline should be single line Dict with "passage" key '''
+        file_path = os.path.abspath(file_path)
+        if not os.path.exists(file_path):
+            raise (OSError, f"Path Invalid, required folder path: {file_path}")
+        with open(file_path, mode="r", encoding='utf-8') as df:
+            while True:
+                data_item = df.readline()
+                if not data_item:
+                    break
+                format_data = ast.literal_eval(data_item)
+                format_data = format_data.get("passage", None) if format_data else None
+                if format_data:
+                    self.VDB.add_texts(texts=[format_data])
+        rich.print(f"Load {len(self.VDB.index.ntotal)} data from file: {file_path}")
     
     def retrieve(self, query:str, k:int=1, score_threshold:Optional[float]=None) -> List[Optional[Document]]:
         '''
@@ -53,6 +75,10 @@ class VDBManager:
                 doc.metadata.update({"retrieve score" : score})
                 retrieve_messages.append(doc)
         return retrieve_messages
+    
+    def store(self, new_data:str):
+        ''' store string into database '''
+        self.VDB.add_texts(texts=new_data)
     
     def as_retriever(self, k:int=1, score_threshold:Optional[float]=None):
         ''' Pack a retrieve action into retriever 

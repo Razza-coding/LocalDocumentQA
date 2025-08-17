@@ -19,6 +19,7 @@ from typing import *
 from CLI_Format import *
 from LogWriter import LogWriter
 
+from DatabaseManager import VDBManager
 from TranslationSubGraph import build_translate_subgraph, TranslateInput
 
 from PromptTools import UserTemplateInputVar, get_user_message
@@ -76,54 +77,15 @@ history_trimmer = trim_messages(
 
 # ===============================
 # Vector Database Store and Retrieve
-def vec_db_summary(LLM_model: BaseChatModel, summary_template:ChatPromptTemplate, user_msg: HumanMessage, AI_response: AIMessage) -> AIMessage:
-    ''' use LLM to make summary '''
-    summary_msg = LLM_model.invoke(summary_template.format_messages(
-        **{
-            "user_input_message"  : user_msg,
-            "AI_response_message" : AI_response
-            }
-        ))
-    return summary_msg[0]
-
-def vec_db_store(vector_database:FAISS, message:BaseMessage) -> None:
-    ''' put message context into vector database '''
-    vector_database.add_texts(texts=[f"{message.content}"])
-
-def vec_db_retrieve(vector_database:FAISS, search_query:str, search_amount:int=4, score_threshold:float=1.2) -> List[Optional[Document]]:
-    ''' retrieve message from vector database '''
-    retrieve_messages = []
-    if vector_database.index.ntotal > 1: # check if database contians data
-        if score_threshold is None:
-            retrieve_data = vector_database.similarity_search_with_score(search_query, search_amount)
-        else:
-            score_threshold = min(1, max(score_threshold, 0))
-            retrieve_data = vector_database.similarity_search_with_score(search_query, search_amount, score_threshold=score_threshold)
-        # Append retrieve score into document
-        for doc, score in retrieve_data:
-            doc.metadata.update({"retrieve score" : score})
-            retrieve_messages.append(doc)
-    return retrieve_messages
-
-def vec_db_build_from_file(vector_database:FAISS, file:str):
-    ''' fills database with data from txt file '''
-    with open(file, mode="r", encoding='utf-8') as df:
-        while True:
-            data_item = df.readline()
-            if not data_item:
-                break
-            format_data = ast.literal_eval(data_item)["passage"]
-            print(format_data)
-            vector_database.add_texts(texts=[format_data])
-
+DatabaseManager = VDBManager(VecDB)
 dataset_name = "mini-wiki"
-if os.path.exists(os.path.abspath(f"prebuild_VDB/{dataset_name}.pkl")):
-    VecDB = VecDB.load_local("prebuild_VDB", VecDB.embeddings, index_name=dataset_name, allow_dangerous_deserialization=True)
-else:
-    raw_data_file = "./BanchMark/Dataset/logs/20250724_rag-datasets_rag-mini-wikipedia-text-corpus.txt"
-    vec_db_build_from_file(VecDB, raw_data_file)
-    VecDB.save_local("prebuild_VDB", dataset_name)
-CLI_print("Vec DB", f"Data amount: {VecDB.index.ntotal}")
+raw_data_file = "./BanchMark/Dataset/logs/20250724_rag-datasets_rag-mini-wikipedia-text-corpus.txt"
+
+if not DatabaseManager.load("prebuild_VDB", dataset_name):
+    DatabaseManager.load_from_file(raw_data_file)
+    DatabaseManager.save("prebuild_VDB", dataset_name)
+
+CLI_print("Vector Database", f"Data amount: {DatabaseManager.amount()}")
 
 # ===============================
 # create LLM callbacks
@@ -184,10 +146,8 @@ def start_node(state: StartState) -> DefaultState:
 def info_retrieve_node(state: DefaultState) -> DefaultState:
     ''' Retrieve infomation in Vector Database '''
     # retrieve data from Database
-    
     search_q = TranslateSubGraph.invoke(TranslateInput(input_text=state["raw_user_input"], trans_lang="English", refine_trans=True, max_refine_trys=3)).get("trans_text")
-    #retrieve_messages, retrieve_scores = vec_db_retrieve(VecDB, search_query=search_q, search_amount=8, score_threshold=1.0)
-    retrieve_documents = vec_db_retrieve(VecDB, search_query=search_q, search_amount=8, score_threshold=1.0)
+    retrieve_documents = DatabaseManager.retrieve(query=search_q, k=8, score_threshold=1.0)
     LLM_debug_logger.write_log(search_q, "Search Query")
    
     # log RAG result
@@ -198,15 +158,6 @@ def info_retrieve_node(state: DefaultState) -> DefaultState:
 
     retrieve_msg = [AIMessage(content=doc.page_content) for doc in retrieve_documents] # turns Document into AIMessage
     return {"extra_info_msg" : retrieve_msg}
-
-def info_store_node(state: DefaultState) -> DefaultState:
-    ''' Store message in Vector Database '''
-    # store into Database
-    if state["node_output_msg"]:
-        vec_db_store(VecDB, to_message(state["node_output_msg"]))
-        CLI_print("RAG", "", "Message Stored")
-
-    return state
 
 def LLM_reply_node(state: DefaultState) -> DefaultState:
     ''' Reply to user's questinos '''
@@ -268,12 +219,10 @@ BuildGraph.add_node("end_node", end_node)
 BuildGraph.add_node("reply_node", LLM_reply_node)
 # function nodes
 BuildGraph.add_node("info_retrieve_node", info_retrieve_node)
-BuildGraph.add_node("info_store_node", info_store_node)
 # edges
 BuildGraph.add_edge("start_node", "info_retrieve_node")
 BuildGraph.add_edge("info_retrieve_node", "reply_node")
 BuildGraph.add_edge("reply_node", "end_node")
-#BuildGraph.add_edge("info_store_node", "end_node")
 ChatBot = BuildGraph.compile(checkpointer=GraphMemory)
 
 class PackedGraph:
