@@ -19,9 +19,10 @@ from typing import *
 from CLI_Format import *
 from LogWriter import LogWriter
 
+from TranslationSubGraph import build_translate_subgraph, TranslateInput
+
 from PromptTools import UserTemplateInputVar, get_user_message
 from PromptTools import SystemTemplateInputVar, get_system_message
-from PromptTools import TranslateTemplateInputVar, get_translate_request_message, TranslateVerifyTemplateInputVar, get_translate_verify_message
 from PromptTools import ChatHistoryTemplateInputMessages, make_chat_history_prompt
 from PromptTools import GeneralChatTemplateInputMessages, make_general_input
 from PromptTools import RAGSummaryChatTemplateInputMessages, make_RAG_summary_prompt
@@ -161,126 +162,9 @@ class DefaultState(TypedDict):
     extra_info_msg  : Annotated[list, add_messages] # stacked extra info from all sources
     node_output_msg : List[BaseMessage] # output of current node
 
-class TranslateInitState(TypedDict):
-    input_text: str 
-    trans_lang: str 
-
-class TranslateState(TypedDict):
-    # input
-    input_text: str # input message to translate
-    trans_lang: str # translate to target langue
-    # output
-    trans_text: str # output of translate result
-    # settings
-    refine_trans: bool # enable LLM double checking translate result, if translate is incorrect, then ask for a better translation
-    max_refine_trys: int # maximum loop for refining trnaslate
-    # inner flags
-    _refine_loop_count: int
-    _correct_translation: bool # is the translation verified as correct
-
 # -------------------------------
 # Sub Graph Nodes
-def translate_start_node(state: TranslateInitState | TranslateState) -> TranslateState:
-    ''' use to apply default note '''
-    node_output = TranslateState(
-        input_text=state.get("input_text"),
-        trans_lang=state.get("trans_lang"),
-        trans_text="",
-        refine_trans=state.get("refine_trans", True),
-        max_refine_trys=state.get("max_refine_trys", 2),
-        _refine_loop_count=state.get("_refine_loop_count", 0),
-        _correct_translation=state.get("_correct_translation", False),
-    )
-    return node_output
-
-def translate_node(state: TranslateState) -> TranslateState:
-    ''' Use LLM to tranlation, format string to JSON and then extract translate result '''
-    # Use enhance prompt to translate, required LLM to output oringal and translate text in JSON format
-    trans_prompt = get_translate_request_message(TranslateTemplateInputVar(translate_lang=state["trans_lang"], input_text=state["input_text"]))
-    LLM_translattion = to_text(LLM_model.invoke(trans_prompt))
-    # extract into json
-    json_blocks = re.findall(r'\{[^{}]*"translate_result"[^{}]*\}', LLM_translattion, re.DOTALL)
-    #json_section = re.search(r"\{.*\}", LLM_translattion, re.DOTALL)
-    if json_blocks:
-        # extract result into json format, and get only translate part
-        state["trans_text"] = ""
-        for block in json_blocks:
-            try:
-                parsed = json.loads(block)
-                if "translate_result" in parsed:
-                    state["trans_text"] = str(parsed["translate_result"])
-                    break
-            except json.JSONDecodeError:
-                continue 
-    else:
-        state["trans_text"] = ""
-        # raise ValueError
-    return state
-
-def verify_node(state: TranslateState) -> TranslateState:
-    ''' check translate result and update flags '''
-    # check for refine mode on or off
-    if not state["refine_trans"]:
-        state["_correct_translation"] = True
-        return state # skips refining, pass verify
-    
-    # check for maximum refine trys
-    if state["_refine_loop_count"] > state["max_refine_trys"]:
-        state["_correct_translation"] = True
-        return state # max try reached, pass verify
-    else:
-        state["_refine_loop_count"] += 1
-    
-    # check for empty output
-    if not state["trans_text"]:
-        state["_correct_translation"] = False
-        return state # translation empty, fail verify
-    
-    # use LLM to check translate result
-    verify_prompt = get_translate_verify_message(TranslateVerifyTemplateInputVar(trans_lang=state["trans_lang"], orignal_text=state["input_text"], translate_text=state["trans_text"]))
-    LLM_verify = to_text(LLM_model.invoke(input=verify_prompt))
-    # execute different extract method, how it works depends on how smart llm is
-    match_dict = re.search(r"\{.*?\}", LLM_verify, re.DOTALL) # target example: { "verify_result" : YES }
-    match_dict = match_dict.group(0) if match_dict else ""
-    match_list = re.search(r"\[.*?\]", LLM_verify, re.DOTALL) # target example: { "verify_result" : [YES] }
-    match_list = match_list.group(0) if match_list else ""
-
-    yes_or_no = match_dict if match_dict else match_list
-    #
-    if "yes" in yes_or_no.lower():
-        state["_correct_translation"] = True
-    else:
-        state["_correct_translation"] = False
-
-    return state
-
-def translate_refine_router(state: TranslateState) -> str:
-    ''' choose next node base on verify result '''
-    if state["_correct_translation"]:
-        return "pass"
-    else:
-        CLI_print("System", "Translation Failed, retry")
-        return "retry"
-
-def translate_output_node(state: TranslateState) -> TranslateState:
-    ''' extract only translate part as output '''
-    return state
-
-# set state
-BuildTranslateGraph = StateGraph(state_schema=TranslateState)
-
-# link nodes
-BuildTranslateGraph.set_entry_point("translate_start_node")
-BuildTranslateGraph.set_finish_point("translate_output_node")
-BuildTranslateGraph.add_node("translate_start_node", translate_start_node)
-BuildTranslateGraph.add_node("translate_node", translate_node)
-BuildTranslateGraph.add_node("verify_node", verify_node)
-BuildTranslateGraph.add_node("translate_output_node", translate_output_node)
-BuildTranslateGraph.add_edge("translate_start_node", "translate_node")
-BuildTranslateGraph.add_edge("translate_node", "verify_node")
-BuildTranslateGraph.add_conditional_edges("verify_node", translate_refine_router, {"pass" : "translate_output_node", "retry": "translate_node"})
-TranslaterBot = BuildTranslateGraph.compile()
-
+TranslateSubGraph = build_translate_subgraph(llm=LLM_model, logger=LLM_debug_logger)
 
 # -------------------------------
 # Main Graph Nodes
@@ -300,7 +184,8 @@ def start_node(state: StartState) -> DefaultState:
 def info_retrieve_node(state: DefaultState) -> DefaultState:
     ''' Retrieve infomation in Vector Database '''
     # retrieve data from Database
-    search_q = TranslaterBot.invoke(TranslateState(input_text=state["raw_user_input"],trans_lang="English",)).get("trans_text")
+    
+    search_q = TranslateSubGraph.invoke(TranslateInput(input_text=state["raw_user_input"], trans_lang="English", refine_trans=True, max_refine_trys=3)).get("trans_text")
     #retrieve_messages, retrieve_scores = vec_db_retrieve(VecDB, search_query=search_q, search_amount=8, score_threshold=1.0)
     retrieve_documents = vec_db_retrieve(VecDB, search_query=search_q, search_amount=8, score_threshold=1.0)
     LLM_debug_logger.write_log(search_q, "Search Query")

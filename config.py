@@ -64,7 +64,6 @@ def init_system(LLM_model_name='gemma3:4b') -> Tuple[BaseChatModel, FAISS]:
     ''' Build system core objects '''
     LLM_model = init_LLM(LLM_model_name)
     VecDB = init_VecDB()
-
     return LLM_model, VecDB
 
 if __name__ == "__main__":

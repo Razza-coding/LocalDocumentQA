@@ -131,52 +131,6 @@ def get_user_message(input_variables: UserTemplateInputVar) -> BaseMessage:
     ''' Get message by filling placeholders '''
     return user_template.format_messages(**input_variables)
 
-# -------------------------------
-# Translate Request template
-class TranslateTemplateInputVar(TypedDict):
-    translate_lang: str
-    input_text: str
-
-translate_template = AIMessagePromptTemplate.from_template(
-'''
-You are a Translate Expert. Translate Input Text into {translate_lang} and output translate result in JSON Format with 1 group. Do not add any explanation or extra text.
-
-Format Example:
-{{
-    "orignal_text" : <put input text here>,
-    "translate_result" : <put translate result here>
-}}
-
-Input Text:
-{input_text}''')
-
-def get_translate_request_message(intput_variables: TranslateTemplateInputVar) -> BaseMessage:
-    ''' Make A simple translation quest prompt, translate input text into target langue '''
-    return translate_template.format_messages(**intput_variables)
-
-# -------------------------------
-# Translate Verify template
-class TranslateVerifyTemplateInputVar(TypedDict):
-    trans_lang: str
-    orignal_text: str
-    translate_text: str
-
-translate_verify_template = AIMessagePromptTemplate.from_template(
-'''
-Answer in {{ "verify_result" : [YES/NO] }} format. Is this {trans_lang} translation correct?
-{{
-    "Orignal Text" : "{orignal_text}",
-    "Translate Text" : "{translate_text}",
-}}
-'''
-)
-
-def get_translate_verify_message(intput_variables: TranslateVerifyTemplateInputVar) -> BaseMessage:
-    ''' Make Verify prompt for translation quest '''
-    intput_variables["translate_text"] = intput_variables.get("translate_text", "")
-    return translate_verify_template.format_messages(**intput_variables)
-
-
 # ===============================
 # Chat Messages Templates
 
@@ -331,13 +285,6 @@ if __name__ == "__main__":
         AI_response_message=to_list_message(AIMessage("I don't know"))
     ))
     CLI_print("Prompt Testing", RAG_summary_prompt, "Make RAG Summary prompt")
-    CLI_next()
-    # test translation request message
-    translation_request_prompt = get_translate_request_message(TranslateTemplateInputVar(
-        translate_lang="English",
-        input_text="這是一個測試訊息"
-    ))
-    CLI_print("Translate Testing", translation_request_prompt, "Make translate Request")
     CLI_next()
 
     CLI_print("Prompt Testing", "End")
