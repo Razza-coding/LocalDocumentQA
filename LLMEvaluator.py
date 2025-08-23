@@ -1,17 +1,7 @@
 import os, sys, json, ast
-# custom download path for bert score embeddings
-PATH_ROOT     = os.path.abspath("./temp")
-BASE_CACHE    = os.path.join(PATH_ROOT, "huggingface")
-DATASET_CACHE = os.path.join(BASE_CACHE, "datasets")
-HUB_CACHE     = os.path.join(BASE_CACHE, "hub")
-os.makedirs(DATASET_CACHE, exist_ok=True)
-os.makedirs(HUB_CACHE, exist_ok=True)
-os.environ["HF_HOME"] = BASE_CACHE
-os.environ["HF_DATASETS_CACHE"] = DATASET_CACHE
-os.environ["HUGGINGFACE_HUB_CACHE"] = HUB_CACHE
-os.environ["HF_HUB_CACHE"] = HUB_CACHE
-os.environ["TRANSFORMERS_CACHE"] = os.path.join(BASE_CACHE, "transformers")
-os.environ["XDG_CACHE_HOME"] = BASE_CACHE
+from typing import *
+import re, math, time
+import rich
 
 from langchain.evaluation import load_evaluator, EvaluatorType
 from langchain_community.utils.math import cosine_similarity
@@ -20,14 +10,14 @@ from langgraph.graph.state import CompiledStateGraph
 from langchain.prompts import BasePromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from nltk.translate import meteor_score as nltk_meteor
+from HF_download_utils import set_hf_cache
+
+# custom HF download path for bert score embeddings
+set_hf_cache("./temp") 
 from datetime import datetime
 from transformers import logging
 logging.set_verbosity_error()
 from bert_score import score as bert_score
-from typing import *
-
-import re, math, time
-import rich
 
 from config import init_LLM, init_embedding, init_VecDB
 from CLI_Format import CLI_input, CLI_next, CLI_print

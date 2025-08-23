@@ -3,23 +3,10 @@ import os, sys
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(parent_dir)
 from LogWriter import LogWriter, remove_special_symbol
-
-# Create custom download path
-PATH_ROOT     = os.path.abspath("./BanchMark")
-BASE_CACHE    = os.path.join(PATH_ROOT, "Dataset")
-DATASET_CACHE = os.path.join(BASE_CACHE, "datasets")
-HUB_CACHE     = os.path.join(BASE_CACHE, "hub")
-Path(DATASET_CACHE).mkdir(parents=True, exist_ok=True)
-Path(HUB_CACHE).mkdir(parents=True, exist_ok=True)
-
-os.environ["HF_HOME"] = BASE_CACHE
-os.environ["HF_DATASETS_CACHE"] = DATASET_CACHE
-os.environ["HUGGINGFACE_HUB_CACHE"] = HUB_CACHE
-os.environ["HF_HUB_CACHE"] = HUB_CACHE
-os.environ["TRANSFORMERS_CACHE"] = os.path.join(BASE_CACHE, "transformers")
-os.environ["XDG_CACHE_HOME"] = BASE_CACHE
+from HF_download_utils import set_hf_cache
 
 # import AFTER custom path is set
+cache_paths = set_hf_cache("./temp")
 from datasets import load_dataset
 
 # Benchmark 分類與名稱
@@ -58,16 +45,16 @@ def preview_dataset(source: str, name: str, split: str, sub):
                 name,
                 sub,
                 split=split,
-                cache_dir=DATASET_CACHE,
+                cache_dir=cache_paths["DATASET_CACHE"],
             )
             msg += f"Samples [{len(ds)}]"
         elif source == "HF_file":
-            file_path = os.path.join(PATH_ROOT, name, sub)
+            file_path = os.path.join(cache_paths["DATASET_CACHE"], name, sub)
             ds = load_dataset(
                 "json",
                 data_files=file_path,
                 split=split,
-                cache_dir=DATASET_CACHE,
+                cache_dir=cache_paths["DATASET_CACHE"],
             )
             msg += f"Samples [{len(ds)}]"
         else:
@@ -80,7 +67,7 @@ def preview_dataset(source: str, name: str, split: str, sub):
         return None
 
 def main():
-    preview_amount = 1000000
+    preview_amount = 10
     for category, dataset_info in benchmarks.items():
         for dataset in dataset_info:
             source = dataset['source']
@@ -89,7 +76,7 @@ def main():
             split    = dataset['split']
             ds = preview_dataset(source, name, split, sub)
             log_name = remove_special_symbol(f"{name}-{sub}")
-            log = LogWriter(log_name=f"{log_name}", log_folder_name="logs", root_folder=BASE_CACHE)
+            log = LogWriter(log_name=f"{log_name}", log_folder_name="logs", root_folder="Dataset")
             log.clear()
             if ds is not None:
                 for idx in range(min(len(ds), preview_amount)):
