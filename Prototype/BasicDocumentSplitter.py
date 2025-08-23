@@ -13,7 +13,7 @@ import os, sys
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(parent_dir)
 from LogWriter import LogWriter
-from config import init_LLM, build_embedding
+from config import init_LLM, init_embedding
 
 '''
 Prototype for testing different text split method
@@ -35,7 +35,7 @@ Source:
 logger = LogWriter(log_name="text_splitter", log_folder_name="test_log", root_folder=os.path.join(os.path.abspath("."), "Prototype"))
 logger.clear()
 local_llm = init_LLM()
-sentence_embedding = build_embedding(model_device='cuda')
+sentence_embedding = init_embedding(model_device='cuda')
 
 # ===============================
 # test inputs

@@ -29,11 +29,11 @@ from typing import *
 import re, math, time
 import rich
 
-from config import init_LLM, build_embedding, init_VecDB
+from config import init_LLM, init_embedding, init_VecDB
 from CLI_Format import CLI_input, CLI_next, CLI_print
 from LogWriter import LogWriter, remove_special_symbol
 
-embed = build_embedding(normalize_embeddings=True)
+embed = init_embedding(normalize_embeddings=True)
 
 def embed_str(input_str: str) -> List[float]:
     ''' Embed string '''

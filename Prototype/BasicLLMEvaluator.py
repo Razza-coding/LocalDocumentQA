@@ -12,7 +12,7 @@ from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(parent_dir)
-from config import init_LLM, build_embedding
+from config import init_LLM, init_embedding
 from CLI_Format import CLI_input, CLI_next, CLI_print
 from LogWriter import LogWriter
 
@@ -264,7 +264,7 @@ if __name__ == "__main__":
     # test subject
     local_llm = init_LLM(LLM_temperature=0)
     judge_llm = local_llm
-    embedding = build_embedding()
+    embedding = init_embedding()
     def embed_fn(str:str) -> str:
         return embedding.embed_documents([str])[0]
     
