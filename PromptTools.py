@@ -79,8 +79,10 @@ def to_list_message(messages: BaseMessage | List[BaseMessage]) -> List[BaseMessa
     
     return [messages]
 
-def to_text(message: BaseMessage | List[BaseMessage]) -> str:
+def to_text(message: BaseMessage | List[BaseMessage] | str) -> str:
     ''' Truns message content into string, accept Message or List contains one Message '''
+    if isinstance(message, str):
+        return message
     return to_message(message).text()
 
 # ===============================

@@ -201,7 +201,7 @@ class LLMEvaluator:
     def get_response(self, question:str) -> str:
         ''' get question response from llm, use a style template to get a shorter respond from llm '''
         style_template = "Answer QUESTION with a short answer. QUESTION: {question}"
-        return self.llm.invoke(style_template.format(question=question)).text()
+        return self.llm.invoke(input=style_template.format(question=question)).text()
 
     def answer_relevancy_eval(self, reference:str, prediction:Optional[str]=None) -> Dict[Literal["score"], int]:
         ''' Calculate similarity between llm predicttion and expected answer, checks realitive '''

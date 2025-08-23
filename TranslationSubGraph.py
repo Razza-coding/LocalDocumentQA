@@ -120,7 +120,7 @@ def build_translate_subgraph(llm: BaseChatModel, logger: Optional[LogWriter]=Non
             return state # skips refining, pass verify
         
         # check for maximum refine trys
-        if state["refine_loop_count"] > state["max_refine_trys"]:
+        if state["refine_loop_count"] >= state["max_refine_trys"]:
             state["correct_translation"] = True
             return state # max try reached, pass verify
         else:

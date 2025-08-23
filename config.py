@@ -9,6 +9,10 @@ import faiss
 
 import json
 import os
+import re
+import rich
+import subprocess
+from pydantic import BaseModel
 from typing import *
 
 def __sys_init_message(build_object_type: str, build_object_name):
@@ -27,7 +31,11 @@ def init_LLM(LLM_model_name='gemma3:4b', LLM_temperature:float=0.7, LLM_url:str=
 
 def build_embedding(model_name: str="sentence-transformers/all-MiniLM-L6-v2", model_device: str="cpu", normalize_embeddings: bool=True) -> HuggingFaceEmbeddings:
     ''' Simplified Sentence Embedding Builder '''
-    embeddings = HuggingFaceEmbeddings(model_name=model_name, model_kwargs={'device': model_device}, encode_kwargs={'normalize_embeddings': normalize_embeddings})
+    embeddings = HuggingFaceEmbeddings(
+        model_name=model_name, 
+        model_kwargs={'device': model_device}, 
+        encode_kwargs={'normalize_embeddings': normalize_embeddings}
+    )
     __sys_init_message("Embedding Model", model_name)
     return embeddings
 
@@ -59,12 +67,47 @@ def init_VecDB():
     __sys_init_message("VecDB", "Faiss")
     return VecDB
     
-
 def init_system(LLM_model_name='gemma3:4b') -> Tuple[BaseChatModel, FAISS]:
     ''' Build system core objects '''
     LLM_model = init_LLM(LLM_model_name)
     VecDB = init_VecDB()
     return LLM_model, VecDB
 
+def get_llm_info(llm: str | ChatOllama) -> Dict[str, Union[Dict[str, str], List[str]]]:
+    ''' Get Model config from ollama command, parse and return dict '''
+    llm_name = llm.model if isinstance(llm, ChatOllama) else llm
+    assert isinstance(llm_name, str), "Input is not string or ChatOllama"
+    # check model exist
+    ollama_list = subprocess.run(["ollama", "list"], text=True, capture_output=True)
+    if ollama_list.returncode != 0:
+        raise RuntimeError(ollama_list.stderr.strip() or "ollama list failed")
+    assert llm_name in ollama_list.stdout, f"Model {llm_name} is not found in Ollama"
+    # get model info
+    ollama_info = subprocess.run(["ollama", "show", llm_name], text=True, capture_output=True)
+    if ollama_info.returncode != 0:
+        raise RuntimeError(ollama_info.stderr.strip() or "ollama show failed")
+    # prase info
+    info: Dict[str, Any] = {}
+    section = None
+    for raw in ollama_info.stdout.splitlines():
+        line = raw.strip()
+        if not line: 
+            continue
+        if line in ("Model", "Capabilities", "Parameters", "License"):
+            section = line
+            info[section] = [] if section in ("Capabilities", "License") else {}
+            continue
+        if not section:
+            continue
+        if section in ("Capabilities", "License"):
+            info[section].append(line)
+        else:
+            m = re.split(r"\s{2,}", line, maxsplit=1)
+            if len(m) == 2:
+                k, v = m
+                info[section][k] = v
+    return info
+
 if __name__ == "__main__":
     LLM_model, VecDB = init_system()
+    rich.print(get_llm_info(LLM_model))
