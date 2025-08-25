@@ -49,7 +49,7 @@ class DefaultState(TypedDict):
     extra_info_msg  : List[BaseMessage] # stacked extra info from all retriever
     history_messages: Annotated[list[AnyMessage], add_messages] # history saver
 
-def build_main_graph(llm:BaseChatModel, database_manager:VDBManager) -> CompiledStateGraph:
+def build_main_graph(llm:BaseChatModel, database_manager:VDBManager, debug_logger: Optional[LogWriter]=None, graph_name:str="MainGraph") -> CompiledStateGraph:
     ''' Create a LLM RAG graph (main graph) '''
     
     # ===============================
@@ -65,7 +65,7 @@ def build_main_graph(llm:BaseChatModel, database_manager:VDBManager) -> Compiled
     knowledge_trimmer = trim_messages(
         max_tokens=MAX_RETRIEVE_CONTEXT,
         strategy="last",
-        token_counter=LLM_model,
+        token_counter=llm,
         include_system=False,
         allow_partial=False,
         start_on="ai",
@@ -74,18 +74,21 @@ def build_main_graph(llm:BaseChatModel, database_manager:VDBManager) -> Compiled
     history_trimmer = trim_messages(
         max_tokens=MAX_HISTORY_CONTEXT,
         strategy="last",
-        token_counter=LLM_model,
+        token_counter=llm,
         include_system=False,
         allow_partial=False,
         start_on="human",
     )
+    # check logger
+    if debug_logger:
+        assert isinstance(debug_logger, LogWriter), "Not a Valid LogWriter"
 
     # ===============================
     # LangGraph Setting
 
     # -------------------------------
     # Sub Graph Nodes
-    TranslateSubGraph = build_translate_subgraph(llm=LLM_model, logger=LLM_debug_logger)
+    TranslateSubGraph = build_translate_subgraph(llm=llm, logger=debug_logger)
 
     # -------------------------------
     # Main Graph Nodes
@@ -105,13 +108,17 @@ def build_main_graph(llm:BaseChatModel, database_manager:VDBManager) -> Compiled
         # retrieve data from Database
         search_q = TranslateSubGraph.invoke(TranslateInput(input_text=state["raw_user_input"], trans_lang="English", refine_trans=True, max_refine_trys=3)).get("trans_text")
         retrieve_documents = database_manager.retrieve(query=search_q, k=8, score_threshold=1.0)
-        LLM_debug_logger.write_log(search_q, "Search Query")
+
+        if debug_logger: 
+            debug_logger.write_log(search_q, "Search Query")
     
         # log RAG result
         retrieved_msg_log = ""
         for doc in retrieve_documents:
             retrieved_msg_log += f"ID : {str(doc.id) :<30} Score : {str( doc.metadata.get('retrieve score') ) :<5}\n{str(doc.page_content) :<}\n\n"
-        LLM_debug_logger.write_log(retrieved_msg_log, "Retrieve Messages")
+        
+        if debug_logger:
+            debug_logger.write_log(retrieved_msg_log, "Retrieve Messages")
 
         retrieve_msg = [AIMessage(content=doc.page_content) for doc in retrieve_documents] # turns Document into AIMessage
         return {
@@ -130,7 +137,9 @@ def build_main_graph(llm:BaseChatModel, database_manager:VDBManager) -> Compiled
 
         # Log history
         history_msg_log = [f"{m.type :<5} : {str(m) :<}" for m in trimmed_msg]
-        LLM_debug_logger.write_log('\n'.join(history_msg_log), "Chat History", add_time=False)
+
+        if debug_logger:
+            debug_logger.write_log('\n'.join(history_msg_log), "Chat History", add_time=False)
         
         # make input
         LLM_input = make_general_input(GeneralChatTemplateInputMessages(
@@ -141,7 +150,7 @@ def build_main_graph(llm:BaseChatModel, database_manager:VDBManager) -> Compiled
         ))
 
         # invoke LLM
-        LLM_reply = LLM_model.invoke(input=LLM_input)
+        LLM_reply = llm.invoke(input=LLM_input)
         LLM_reply = to_list_message(LLM_reply)
     
         return {
@@ -151,7 +160,10 @@ def build_main_graph(llm:BaseChatModel, database_manager:VDBManager) -> Compiled
     def end_node(state: DefaultState) -> EndState:
         ''' end node, truns inner State to output format '''
         LLM_reply = state["history_messages"][-1]
-        LLM_debug_logger.write_s_line(1)
+
+        if debug_logger:
+            debug_logger.write_s_line(1)
+
         return {
             "output_msg" : to_list_message(LLM_reply)
         }
@@ -178,6 +190,7 @@ def build_main_graph(llm:BaseChatModel, database_manager:VDBManager) -> Compiled
     BuildGraph.add_edge("info_retrieve_node", "reply_node")
     BuildGraph.add_edge("reply_node", "end_node")
     MainGraph = BuildGraph.compile(checkpointer=GraphMemory).with_config(config=main_graph_config)
+    MainGraph.name = str(graph_name)
     return MainGraph
 
 
@@ -226,7 +239,7 @@ if __name__ == "__main__":
     # Start the Chat Bot
 
     # build main graph
-    MainGraph = build_main_graph(LLM_model, database_manager)
+    MainGraph = build_main_graph(LLM_model, database_manager, LLM_debug_logger)
 
     # set graph system setting
     AI_name = "JOHN"
