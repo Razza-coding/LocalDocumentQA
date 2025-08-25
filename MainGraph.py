@@ -13,6 +13,7 @@ from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 from langgraph.checkpoint.memory import MemorySaver
 
+from pydantic import BaseModel
 from config import init_system, get_llm_info
 import os, sys, re, ast, json
 import uuid
@@ -25,7 +26,7 @@ from DatabaseManager import VDBManager
 from TranslationSubGraph import build_translate_subgraph, TranslateInput
 
 from PromptTools import UserTemplateInputVar, get_user_message
-from PromptTools import SystemTemplateInputVar, get_system_message
+from PromptTools import SystemPromptConfig, get_system_message
 from PromptTools import ChatHistoryTemplateInputMessages, make_chat_history_prompt
 from PromptTools import GeneralChatTemplateInputMessages, make_general_input
 from PromptTools import RAGSummaryChatTemplateInputMessages, make_RAG_summary_prompt
@@ -36,8 +37,8 @@ from PromptTools import to_list_message, to_message, to_text
 # -------------------------------
 # State Define
 class StartState(TypedDict):
-    raw_user_input: str
-    system_setting: SystemTemplateInputVar
+    input: str
+    prompt_config: SystemPromptConfig
 
 class EndState(TypedDict):
     output_msg : List[BaseMessage]
@@ -94,10 +95,10 @@ def build_main_graph(llm:BaseChatModel, database_manager:VDBManager, debug_logge
     # Main Graph Nodes
     def start_node(state: StartState) -> DefaultState:
         ''' take raw input and make a valid message for system '''
-        user_messsage  = get_user_message(UserTemplateInputVar(raw_user_input = state["raw_user_input"]))
-        system_message = get_system_message(state["system_setting"])
+        user_messsage  = get_user_message(UserTemplateInputVar(raw_user_input = state["input"]))
+        system_message = get_system_message(state["prompt_config"])
         return {
-            "raw_user_input"  : state["raw_user_input"],
+            "raw_user_input"  : state["input"],
             "system_msg"      : system_message,
             "user_msg"        : user_messsage,
             "extra_info_msg"  : [],
@@ -244,14 +245,14 @@ if __name__ == "__main__":
     # set graph system setting
     AI_name = "JOHN"
     professional_role = "專業AI助理"
-    system_setting = SystemTemplateInputVar(
+    system_setting = SystemPromptConfig(
             AI_name = AI_name,
             professional_role = professional_role,
         )
 
     # Hello Message
     initial_input = "現在使用者剛開啟系統，請 AI 聊天機器人對使用者自我介紹一下"
-    response = MainGraph.invoke(StartState(raw_user_input=initial_input, system_setting=system_setting))
+    response = MainGraph.invoke(StartState(input=initial_input, prompt_config=system_setting))
 
     CLI_print("Chat Bot", to_text(response.get("output_msg", "INITIALIZE FAILED")), "Initialize AI Chat Bot")
 
@@ -266,7 +267,7 @@ if __name__ == "__main__":
             break
         
         # invoke LLM
-        response = MainGraph.invoke(StartState(raw_user_input=raw_user_input, system_setting=system_setting))
+        response = MainGraph.invoke(StartState(input=raw_user_input, prompt_config=system_setting))
         
         # reply
         answer = to_text(response.get("output_msg", "EMPTY RESPONSE"))

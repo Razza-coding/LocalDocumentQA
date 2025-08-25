@@ -1,8 +1,4 @@
-import os, sys, json, ast
-from typing import *
-import re, math, time
-import rich
-
+from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage, AIMessage, trim_messages
 from langchain.evaluation import load_evaluator, EvaluatorType
 from langchain_community.utils.math import cosine_similarity
 from langchain_core.language_models import BaseChatModel
@@ -11,6 +7,11 @@ from langchain.prompts import BasePromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from nltk.translate import meteor_score as nltk_meteor
 from HF_download_utils import set_hf_cache
+from pydantic import BaseModel, Field
+import os, sys, json, ast
+from typing import *
+import re, math, time
+import rich
 
 # custom HF download path for bert score embeddings
 set_hf_cache("./temp") 
@@ -22,6 +23,10 @@ from bert_score import score as bert_score
 from config import init_LLM, init_embedding, init_VecDB
 from CLI_Format import CLI_input, CLI_next, CLI_print
 from LogWriter import LogWriter, remove_special_symbol
+from DatabaseManager import VDBManager
+import MainGraph as MG
+import BaselineGraph as BG
+from PromptTools import SystemPromptConfig, to_text
 
 embed = init_embedding(normalize_embeddings=True)
 
@@ -129,20 +134,6 @@ def load_prediction(file:str) -> List[Optional[Dict[Literal["question", "referen
     rich.print(f"Loaded pre-generate predictions {len(test_case)} items.")
     return test_case
 
-def run_qa_test(self, llm:Any, score_func:Any = lambda x, GT : bool( str(GT).lower() in str(x).lower() ) ):
-    ''' This need rewrite '''
-    assert self.qa_pairs is not None, "QA test not loaded"
-    score = {"correct" : 0, "wrong" : 0, "total" : 0}
-    for qa in self.qa_pairs:
-        reply = llm.invoke(input=qa["question"]).text()
-        score["total"] += 1
-        if score_func(reply, qa["answer"]):
-            score["correct"] += 1
-        else:
-            score["wrong"] += 1
-        rich.print(f"Score : {score} \n Question : {{ {qa['question'][:100]} }} \n Reply : {{ {reply[:100]} }}")
-    return score
-
 class TestCaseLoader:
     def __init__(self, test_name:Optional[str]=None, qa_file:Optional[str]=None):
         self.test_name = test_name
@@ -153,8 +144,7 @@ class TestCaseLoader:
         return len(self.test_items)
 
     def load(self, qa_file:str):
-        ''' load test cases from txt files '''
-        ''' append new to existed test cases '''
+        ''' load test cases from txt files, append new to existed test cases '''
         self.test_items.extend(load_test_qa(qa_file, q_key="question", a_key="answer"))
     
     def clear(self):
@@ -166,14 +156,37 @@ class TestCaseLoader:
         for tc in self.test_items:
             yield tc
 
-class LLMEvaluator:
-    def __init__(self, llm: BaseChatModel | CompiledStateGraph):
-        ''' Execute all kinds of test for LLM '''
-        assert llm != None, "Please set a valid llm or LangChain Graph"
-        self.llm: BaseChatModel | CompiledStateGraph = llm
+class EvaluationInput(BaseModel):
+    ''' Defines Evaluation input, test graph need to have same parameter in Start State '''
+    input: str
+    prompt_config: Dict
+
+class GraphEvaluator:
+    def __init__(self, graph: CompiledStateGraph, prompt_config: Optional[Dict | type[BaseModel]]=None):
+        ''' 
+        Execute all kinds of test for Compiled Graph,
+        - StartState should be one input and one invoke_config
+            - input and invoke_config will assamble as input prompt
+            - example : {"input" : quesiton string, "invoke_config" : Dict}
+        - invoke_config : sets optional variable slot in Start State  
+        '''
+        assert graph != None, "Please set a valid LangChain Graph"
+        self.graph: CompiledStateGraph = graph
+        self.prompt_config = prompt_config.model_dump() if isinstance(prompt_config, BaseModel) else prompt_config
+        # check if config is in corrent format
+        test_evaluation_input = EvaluationInput(input="Test Question", prompt_config=self.prompt_config)
+        #
         self.score_board = {"test_amount" : 0, "correct": 0, "incorrect": 0}
         self.incorrect_items = []
         self.correct_items = []
+        self.graph_name = graph.get_name()
+    
+    def get_response(self, question:str) -> str:
+        ''' get question response from graph '''
+        evaluation_input = EvaluationInput(input=question, prompt_config=self.prompt_config)
+        response = self.graph.invoke(evaluation_input)
+        response = response.get("output_msg", "EMPTY RESPONSE")
+        return to_text(response)
     
     def __split_sections(self, artical:str, expected_title:List[str]):
         ''' split artical into sections between titles, return a dict with title as key, section as value'''
@@ -187,11 +200,6 @@ class LLMEvaluator:
             value = parts[i+1].strip() if i+1 < len(parts) else ""
             result[key] = value
         return result
-
-    def get_response(self, question:str) -> str:
-        ''' get question response from llm, use a style template to get a shorter respond from llm '''
-        style_template = "Answer QUESTION with a short answer. QUESTION: {question}"
-        return self.llm.invoke(input=style_template.format(question=question)).text()
 
     def answer_relevancy_eval(self, reference:str, prediction:Optional[str]=None) -> Dict[Literal["score"], int]:
         ''' Calculate similarity between llm predicttion and expected answer, checks realitive '''
@@ -210,8 +218,18 @@ class LLMEvaluator:
         return {"score" : score}
 
     def llm_eval(self, judge_llm: BaseChatModel, question:str, reference:str, prediction:Optional[str]=None) -> Dict[Literal["value", "score", "completion", "reasoning sections"], int | str]:
-        ''' Eval a single QA result by judge_llm using langchian evalrator, reference : expected answer, prediction : llm output response '''
-        ''' Four key section generated by judge_llm: QUESTION、CONTEXT、STUDENT ANSWER、EXPLANATION、GRADE '''
+        ''' 
+        Eval a single QA result by judge_llm using langchian evalrator.
+        - reference : expected answer
+        - prediction : llm output response
+        Five key section generated by judge_llm.
+        - key sections : 
+            - QUESTION
+            - CONTEXT
+            - STUDENT ANSWER
+            - EXPLANATION
+            - GRADE 
+        '''
         if judge_llm is None:
             rich.print("Skip LLM Evaluation (empty judge llm)")
             return {"reasoning" : "SKIP", "value" : None, "score" : None}
@@ -271,16 +289,18 @@ class LLMEvaluator:
             prediction_folder = os.path.abspath("./test_log")
             os.makedirs(prediction_folder, exist_ok=True)
             create_time = datetime.now().strftime("%Y%m%d")
-            save_path = os.path.join(prediction_folder, remove_special_symbol(f"{create_time}_{test_case.test_name}_{self.llm.model}_prediction") + ".json")
-        with open(save_path, mode="w", encoding="utf-8") as af:
-            for tc in test_case.get():
-                qutestion = tc["question"]
-                reference = tc["answer"]
-                id        = tc["id"]
-                prediction = self.get_response(qutestion)
-                log_msg = {"question" : qutestion, "reference" : reference, "id" : id, "prediction" : prediction}
-                write_msg = json.dumps(log_msg, ensure_ascii=False) + "\n"
-                af.write(write_msg)
+            save_path = os.path.join(prediction_folder, remove_special_symbol(f"{create_time}_{test_case.test_name}_{self.graph_name}_prediction") + ".json")
+        with open(save_path, mode="w", encoding="utf-8") as answer_file:
+            answer_file.truncate(0)
+        for tc in test_case.get():
+            qutestion = tc["question"]
+            reference = tc["answer"]
+            id        = tc["id"]
+            prediction = self.get_response(qutestion)
+            log_msg = {"question" : qutestion, "reference" : reference, "id" : id, "prediction" : prediction}
+            write_msg = json.dumps(log_msg, ensure_ascii=False) + "\n"
+            with open(save_path, mode="a", encoding="utf-8") as answer_file:
+                answer_file.write(write_msg)
         rich.print(f"Saved all predictions at {save_path}")
         return save_path
     
@@ -350,32 +370,98 @@ class LLMEvaluator:
             
 
 if __name__ == "__main__":
+    # ===============================
+    # Load Core Objects
 
-    qa_file = r"./prebuild_VDB/mini-wiki_question-answer_10.txt" # example : {'question': 'Was Abraham Lincoln the sixteenth President of the United States?', 'answer': 'yes', 'id': 0}
-
-    llm = init_LLM(LLM_temperature=0)
-
-    logger = LogWriter(log_name="LLM_Evaluation", log_folder_name="test_log")
-    logger.clear()
-    
-    evaluator = LLMEvaluator(llm)
-    test_case = TestCaseLoader("QA Test")
-
-    # load test case
+    # -------------------------------
+    # Load QA file
+    qa_file = r"./prebuild_VDB/mini-wiki_question-answer_1.txt" # example : {'question': 'Was Abraham Lincoln the sixteenth President of the United States?', 'answer': 'yes', 'id': 0}
+    test_case = TestCaseLoader("QA_Test")
     test_case.load(qa_file)
     for c in test_case.get():
         print(c)
 
-    # generate all predictions
-    pre_generate_answer = evaluator.generate_prediction(test_case)
-    # release test llm
+    # -------------------------------
+    # Init core object
+    llm = init_LLM(LLM_temperature=0)
+    vdb = init_VecDB()
+    db_manager = VDBManager(vdb)
+
+    # ===============================
+    # Create Main Graph Evaluator
+
+    # -------------------------------
+    # Load database
+    dataset_name = "mini-wiki"
+    raw_data_file = "./BanchMark/Dataset/logs/20250724_rag-datasets_rag-mini-wikipedia-text-corpus.txt"
+    if not db_manager.load("prebuild_VDB", dataset_name):
+        db_manager.load_from_file(raw_data_file)
+        db_manager.save("prebuild_VDB", dataset_name)
+    CLI_print("Vector Database", f"Data amount: {db_manager.amount()}")
+
+    # -------------------------------
+    # MainGraph
+    main_graph = MG.build_main_graph(llm, db_manager)
+    AI_name = "JOHN"
+    professional_role = "專業AI助理"
+    main_graph_prompt_cfg = MG.SystemPromptConfig(
+            AI_name = AI_name,
+            professional_role = professional_role,
+            chat_lang = "English",
+            negitive_rule = "Reply with other langue",
+            output_format = "Answer QUESTION with a short answer. As simple as possible."
+        )
+
+    # -------------------------------
+    # Init Evaluator
+    main_graph_evaluator = GraphEvaluator(main_graph, main_graph_prompt_cfg)
+    
+    # ===============================
+    # Create Baseline Graph Evaluator
+
+    # -------------------------------
+    # Baseline Graph
+    baseline_graph = BG.build_baseline_graph(llm)
+    baseline_graph_prompt_cfg = BG.SystemPromptConfig(
+        chat_lang="English",
+        negitive_rule="Reply with other langue",
+        output_format="Answer QUESTION with a short answer, as simple as possible"
+    )
+  
+    # -------------------------------
+    # Init Evaluator
+    baseline_graph_evaluator = GraphEvaluator(baseline_graph, baseline_graph_prompt_cfg)
+
+    # ===============================
+    # Execute Evaluation
+
+    # -------------------------------
+    # Generate all predictions
+    main_graph_prediction     = main_graph_evaluator.generate_prediction(test_case)
+    baseline_graph_prediction = baseline_graph_evaluator.generate_prediction(test_case)
+
+    # -------------------------------
+    # close test llm
     os.system(f"ollama stop {llm.model}")
     del llm
+
+    # -------------------------------
     # init judge llm
     judge_llm = init_LLM(LLM_model_name="gpt-oss:latest", LLM_temperature=0)
+
+    # -------------------------------
     # use judge llm to evaluate
-    evaluator.run_eval_from_file(pre_generate_answer, judge_llm=judge_llm, logger=logger)
-    # release judge llm
+    main_graph_logger = LogWriter(log_name="MainGraph_Evaluation", log_folder_name="test_log")
+    main_graph_logger.clear()
+
+    baseline_graph_logger = LogWriter(log_name="BaselineGraph_Evaluation", log_folder_name="test_log")
+    baseline_graph_logger.clear()
+
+    main_graph_evaluator.run_eval_from_file(main_graph_prediction, judge_llm=judge_llm, logger=main_graph_logger)
+    baseline_graph_evaluator.run_eval_from_file(baseline_graph_prediction, judge_llm=judge_llm, logger=baseline_graph_logger)
+
+    # -------------------------------
+    # close judge llm
     os.system(f"ollama stop {judge_llm.model}")
     del judge_llm
 

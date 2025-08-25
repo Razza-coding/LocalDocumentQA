@@ -13,6 +13,7 @@ from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 from langgraph.checkpoint.memory import MemorySaver
 
+from pydantic import BaseModel, Field
 from config import init_LLM, get_llm_info
 import os, sys, re, ast, json
 import uuid
@@ -20,18 +21,45 @@ from math import floor, ceil
 from typing import *
 from CLI_Format import *
 from LogWriter import LogWriter
-
-from DatabaseManager import VDBManager
-
-from PromptTools import UserTemplateInputVar, get_user_message
-from PromptTools import SystemTemplateInputVar, get_system_message
-from PromptTools import GeneralChatTemplateInputMessages, make_general_input
 from PromptTools import to_list_message, to_message, to_text
-from MainGraph import StartState, EndState
 
 
 # -------------------------------
+# Prompt Template
+class SystemPromptConfig(BaseModel):
+    chat_lang:str     = Field(default="English")
+    negitive_rule:str = Field(default="Reply with other langue")
+    output_format:str = Field(default="Answer QUESTION with a short answer, as simple as possible")
+
+system_prompt_template = SystemMessagePromptTemplate.from_template(
+    (
+        "Use {chat_lang} to communicate with user while avoiding violate {negitive_rule}.\n"
+        "You will be given OUTPUT FORMAT, which discribes a style or format for your reply"
+        "OUTPUT FORMAT:{output_format}\n"
+        "\n"
+        "You should reply human user according to OUTPUT FORMAT.\n"
+        "\n\n"
+    )
+)
+
+user_prompt_template = HumanMessagePromptTemplate.from_template(
+    "{raw_user_input}\n"
+    )
+
+input_template = ChatPromptTemplate.from_messages([
+    MessagesPlaceholder("system_message"),
+    MessagesPlaceholder("user_message"),
+])
+
+# -------------------------------
 # State Define
+class StartState(TypedDict):
+    input: str
+    prompt_config: SystemPromptConfig
+
+class EndState(TypedDict):
+    output_msg : List[BaseMessage]
+
 class DefaultState(TypedDict):
     raw_user_input  : str # raw input string
     system_msg      : List[BaseMessage] # system setting
@@ -45,21 +73,22 @@ def build_baseline_graph(llm:BaseChatModel, graph_name:str="BaselineGraph") -> C
     # Graph Setting
     def start_node(state: StartState) -> DefaultState:
         ''' take raw input and make a valid message for system '''
-        user_messsage  = get_user_message(UserTemplateInputVar(raw_user_input = state["raw_user_input"]))
-        system_message = get_system_message(state["system_setting"])
+        state["prompt_config"] = state["prompt_config"].model_dump() if isinstance(state["prompt_config"], BaseModel) else state["prompt_config"]
+        user_message   = user_prompt_template.format(raw_user_input=state["input"])
+        system_message = system_prompt_template.format(**state["prompt_config"])      
         return {
-            "raw_user_input"  : state["raw_user_input"],
+            "raw_user_input"  : state["input"],
             "system_msg"      : system_message,
-            "user_msg"        : user_messsage,
+            "user_msg"        : user_message,
             "output_msg"      : None
         }
 
     def LLM_reply_node(state: DefaultState) -> DefaultState:
         # make input
-        LLM_input = make_general_input(GeneralChatTemplateInputMessages(
-            system_message    = state["system_msg"],
-            user_message      = state["user_msg"]
-        ))
+        LLM_input = input_template.invoke({
+            "system_message" : to_list_message(state["system_msg"]),
+            "user_message"   : to_list_message(state["user_msg"]),
+            })
 
         # invoke LLM
         LLM_reply = llm.invoke(input=LLM_input)
@@ -105,15 +134,10 @@ if __name__ == "__main__":
 
     # ===============================
     # set graph system setting
-    AI_name = "JOHN"
-    professional_role = "專業AI助理"
-    # A QA answering setting
-    system_setting = SystemTemplateInputVar(
-            AI_name = AI_name,
-            professional_role = professional_role,
+    system_setting = SystemPromptConfig(
             chat_lang = "English",
             negitive_rule = "Reply with other langue",
-            output_format = "Answer QUESTION with a short answer. As simple as possible."
+            output_format = "Respond QUESTION with a short answer, as simple as possible"
         )
 
     # ===============================
@@ -121,7 +145,7 @@ if __name__ == "__main__":
 
     # Hello Message
     initial_input = "現在使用者剛開啟系統，請 AI 聊天機器人對使用者自我介紹一下"
-    response = BaselineGraph.invoke(StartState(raw_user_input=initial_input, system_setting=system_setting))
+    response = BaselineGraph.invoke(StartState(input=initial_input, prompt_config=system_setting))
     CLI_print("Chat Bot", to_text(response.get("output_msg", "INITIALIZE FAILED")), "Initialize AI Chat Bot")
 
     # Chat loop
@@ -130,7 +154,7 @@ if __name__ == "__main__":
         if raw_user_input.lower() == "exit":
             break
         # invoke 
-        response = BaselineGraph.invoke(StartState(raw_user_input=raw_user_input, system_setting=system_setting))
+        response = BaselineGraph.invoke(StartState(input=raw_user_input, prompt_config=system_setting))
         # reply
         answer = to_text(response.get("output_msg", "EMPTY RESPONSE"))
         CLI_print("AI Chat Bot", answer)

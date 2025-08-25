@@ -1,5 +1,6 @@
 from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage, AIMessage, trim_messages
 from langchain_core.prompts import  BaseChatPromptTemplate, MessagesPlaceholder, ChatPromptTemplate, ChatMessagePromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate, AIMessagePromptTemplate
+from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 from typing import *
 from CLI_Format import *
@@ -25,7 +26,7 @@ Prompt Tools
 # Predefined Partial Prompt
 
 default_chat_lang      = "繁體中文 English 日文"
-defualt_negitive_rule  = "使用簡體中文"
+default_negitive_rule  = "使用簡體中文"
 default_output_format  = """
 Write a small friendly artical, start by writing one sentence, inform user what you think.
 And then, depend on what user ask, provide atleast one option they can choice without asking more questions.
@@ -34,7 +35,6 @@ Finally, ask more detail about the user's question if needed, or provide some op
 
 # ===============================
 # Predefined Message
-
 empty_history_filler   = AIMessage(content="No history message found.")
 empty_knowledge_filler = AIMessage(content="No related Knowledge or Data found.")
 
@@ -90,13 +90,12 @@ def to_text(message: BaseMessage | List[BaseMessage] | str) -> str:
 
 # -------------------------------
 # System Message
-
-class SystemTemplateInputVar(TypedDict):
+class SystemPromptConfig(BaseModel):
     AI_name : str
     professional_role : str
-    chat_lang     : Optional[str]
-    negitive_rule : Optional[str]
-    output_format : Optional[str]
+    chat_lang     : Optional[str] = Field(default=default_chat_lang)
+    negitive_rule : Optional[str] = Field(default=default_negitive_rule)
+    output_format : Optional[str] = Field(default=default_output_format)
 
 system_template = SystemMessagePromptTemplate.from_template(
     (
@@ -111,27 +110,25 @@ system_template = SystemMessagePromptTemplate.from_template(
     )
 )
 
-def get_system_message(input_variables: SystemTemplateInputVar) -> BaseMessage:
+def get_system_message(input_variables: SystemPromptConfig | Dict) -> BaseMessage:
     ''' Get message by filling placeholders '''
-    auto_fill_input = SystemTemplateInputVar(
-        AI_name           = input_variables.get("AI_name"),
-        professional_role = input_variables.get("professional_role"),
-        chat_lang         = input_variables.get("chat_lang", default_chat_lang),
-        negitive_rule     = input_variables.get("negitive_rule", defualt_negitive_rule),
-        output_format     = input_variables.get("output_format", default_output_format),
-    )
-    return system_template.format_messages(**auto_fill_input)
+    if isinstance(input_variables, Dict):
+        # Fills empty parameter with default settings
+        input_variables = SystemPromptConfig(**input_variables).model_dump()
+    else:
+        input_variables = input_variables.model_dump()
+    return system_template.format_messages(**input_variables)
 
 # -------------------------------
 # User Message
-class UserTemplateInputVar(TypedDict):
+class UserTemplateInputVar(BaseModel):
     raw_user_input: str
 
 user_template = HumanMessagePromptTemplate.from_template("<User>:{raw_user_input}")
 
 def get_user_message(input_variables: UserTemplateInputVar) -> BaseMessage:
     ''' Get message by filling placeholders '''
-    return user_template.format_messages(**input_variables)
+    return user_template.format_messages(**input_variables.model_dump())
 
 # ===============================
 # Chat Messages Templates
@@ -238,7 +235,7 @@ if __name__ == "__main__":
     CLI_next()
 
     # test system message
-    system_msg = get_system_message(SystemTemplateInputVar(
+    system_msg = get_system_message(SystemPromptConfig(
         AI_name="JOHN",
         professional_role="Math Teacher"
     ))
