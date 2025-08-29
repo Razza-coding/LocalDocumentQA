@@ -7,6 +7,7 @@ from typing import List
 import rich
 import logging
 import time
+from ChunkingTools import StandAloneFactTextSplitter
 
 '''
 A Tool integrates multiple LangChain Tools to load Documents
@@ -16,8 +17,6 @@ Loader.load(filepath) -> List[Document]
 Supports:
  - txt, csv, pdf, doc
  - web url
-Not Supports
- - images
 '''
 
 logger = logging.getLogger(__name__)
@@ -83,6 +82,7 @@ class DynamicWebLoader(SeleniumURLLoader):
 
 class DocLoader:
     def __init__(self):
+        ''' Universal Document Loader, File to List of Documents '''
         self.root = os.path.abspath('.')
         pass
     

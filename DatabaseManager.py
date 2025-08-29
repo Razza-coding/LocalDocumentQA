@@ -27,6 +27,14 @@ class VDBManager:
         ''' Amount of Data in Database '''
         return self.VDB.index.ntotal
     
+    def view_data(self, k:int=10):
+        ''' Print k amount of random data in Database '''
+        k = min(max(k, 1), self.amount())
+        stored_document: Dict[str, Document] = self.VDB.docstore._dict
+        preview_data = list(stored_document.values())[:k]
+        for d in preview_data:
+            rich.print(d)
+    
     def load(self, folder_path: str, index_name:str) -> bool:
         ''' Load form prebuild VDB file, return True if load success, False otherwise '''
         folder_path = os.path.abspath(folder_path)
@@ -76,8 +84,12 @@ class VDBManager:
                 retrieve_messages.append(doc)
         return retrieve_messages
     
-    def store(self, new_data:str):
+    def store(self, new_data:str | List[str]):
         ''' store string into database '''
+        if isinstance(new_data, str):
+            self.VDB.add_texts(texts=[new_data])
+            return
+        assert isinstance(new_data, List[str]), "Input list item does not contain string."
         self.VDB.add_texts(texts=new_data)
     
     def as_retriever(self, k:int=1, score_threshold:Optional[float]=None):
@@ -98,7 +110,17 @@ class VDBManager:
         assert len(self.VDB.index_to_docstore_id) == 0 # vector - document mapping
 
 if __name__ == "__main__":
-    test_manager = VDBManager(init_VecDB())
+    db = init_VecDB()
+    test_manager = VDBManager(db)
+    #
+    CLI_print("VDB Test", "Store Text")
+    test_text_1 = "要如何從紐約市中心前往自由女神像?"
+    test_text_2 = "Where can I find someone to ask for direction?"
+    test_text_3 = "請問 Dr.Kevin 現在在看診嗎?"
+    test_manager.store(test_text_1)
+    test_manager.store(test_text_2)
+    test_manager.store(test_text_3)
+    test_manager.view_data()
     #
     CLI_print("VDB Test", "Load VDB")
     test_manager.load("prebuild_VDB", "mini-wiki")

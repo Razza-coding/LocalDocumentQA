@@ -12,6 +12,9 @@
 **/temp/*
 Goals.*
 
+# different version of unused prompt template
+unused_prompt_template/*
+
 # Abandoned side features
 old_code/*
 

@@ -28,7 +28,7 @@ Prompt Tools
 default_chat_lang      = "繁體中文 English 日文"
 default_negitive_rule  = "使用簡體中文"
 default_output_format  = """
-Write a small friendly artical, start by writing one sentence, inform user what you think.
+Write a small friendly article, start by writing one sentence, inform user what you think.
 And then, depend on what user ask, provide atleast one option they can choice without asking more questions.
 Finally, ask more detail about the user's question if needed, or provide some option user might want to do next.
 """
