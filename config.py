@@ -50,7 +50,7 @@ def init_VecDB():
         model_kwargs=embedding_model_kwargs,
         encode_kwargs=encode_kwargs
     )
-    __sys_init_message("VecDB Embeccing", embedding_model_name)
+    __sys_init_message("VecDB Embedding", embedding_model_name)
 
     # index of VecDB
     dimension  = len(embeddings.embed_query("foo"))
@@ -73,6 +73,23 @@ def init_system(LLM_model_name='gemma3:4b') -> Tuple[BaseChatModel, FAISS]:
     VecDB = init_VecDB()
     return LLM_model, VecDB
 
+def get_model_list() -> List[str]:
+    ''' get all available model in your Ollama '''
+    ollama_info = subprocess.run(["ollama", "list"], text=True, capture_output=True)
+    ollama_info = ollama_info.stdout.strip()
+    exist_model_names = ollama_info.split('\n')
+    exist_model_names = [m.split(' ').pop(0) for m in exist_model_names[1:]]
+    return exist_model_names
+
+def check_model_exists(model_name:str) -> bool:
+    ''' check if model available in Ollama'''
+    exist_model_names = get_model_list()
+    if not isinstance(model_name, str) or not model_name in exist_model_names:
+        rich.print(f"Model name not found in ollama: {model_name}\nPlease pull model before executing")
+        rich.print(f"Existing Models: {exist_model_names}")
+        return False
+    return True
+    
 def get_llm_info(llm: str | ChatOllama) -> Dict[str, Union[Dict[str, str], List[str]]]:
     ''' Get Model config from ollama command, parse and return dict '''
     llm_name = llm.model if isinstance(llm, ChatOllama) else llm
@@ -109,5 +126,6 @@ def get_llm_info(llm: str | ChatOllama) -> Dict[str, Union[Dict[str, str], List[
     return info
 
 if __name__ == "__main__":
+    check_model_exists(None)
     LLM_model, VecDB = init_system()
     rich.print(get_llm_info(LLM_model))

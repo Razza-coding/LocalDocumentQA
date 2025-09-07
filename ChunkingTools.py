@@ -207,6 +207,7 @@ class ClaimWithCitationsExtractor:
             }, 
             stop=["\n\n\n", "```"]
             )
+        self.extract_progress: float = 1 # 0.0~1.0
         self.llm_chunking_runnable = proposal_indexing_template | self.structured_llm
 
     def split_text(self, text:str, chunk_size:int, chunk_overlap:int, citation_score:float=0.95, logger:Optional[LogWriter]=None) -> Tuple[ List[ List[Claim] ], List[ Tuple[int, str] ] ]:
@@ -220,10 +221,11 @@ class ClaimWithCitationsExtractor:
         rough_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
         chunks = rough_splitter.split_text(text)
         rich.print(f"Processing {len(chunks)} chunks")
+        self.extract_progress = 0 if len(chunks) else 1
         #
-        chunk_claims   = []
-        labeled_chunks = []
-        for chunk_id, chunk in enumerate(chunks):
+        chunk_claims   : List[ List[Claim] ]     = []
+        labeled_chunks : List[ Tuple[int, str] ] = []
+        for chunk_id, chunk in enumerate(chunks, start=1):
             d_claims: List[DetailedClaim] = self.extract_claim(chunk, citation_score)
             logger.write_log(log_message=chunk,  message_section=f"Chunk {chunk_id}") if logger else None
             citation_count_msg = '\n'.join([f"Chunk {chunk_id :<3} Claim {c_num :<3} Citation [ Real {len(c.real_citations) :<3} Fake {len(c.fake_citations) :<3} ]" for c_num, c in enumerate(d_claims)])
@@ -237,6 +239,8 @@ class ClaimWithCitationsExtractor:
                 claims.append(_c)
             chunk_claims.append(claims)
             labeled_chunks.append((chunk_id, chunk))
+            self.extract_progress = chunk_id / len(chunks)
+        self.extract_progress = 1
         return chunk_claims, chunks
     
     def check_citation(self, chunk: str, citations: List[str], fuzzy_score:float=0.95) -> Dict[Literal["real", "fake"], List[ Tuple[float, str] ] ]:

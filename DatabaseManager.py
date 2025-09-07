@@ -99,14 +99,16 @@ class VDBManager:
         '''
         return self.VDB.as_retriever(search_type="similarity", k=k, score_threshold=score_threshold)
     
-    def __clear(self):
+    def clear(self):
         ''' delete all content inside VDB '''
         all_ids = list(self.VDB.index_to_docstore_id.values())
         rich.print(f"Clearing Database, total of {len(all_ids)} items.")
-        self.VDB.delete([all_ids])
+        if not all_ids:
+            return
+        self.VDB.delete(all_ids)
         # check
         assert self.VDB.index.ntotal == 0 # vectors
-        assert len(self.VDB.docstore.__dict__) == 0 # documents
+        assert len(self.VDB.docstore.__dict__.get("_dict", {})) == 0 # documents
         assert len(self.VDB.index_to_docstore_id) == 0 # vector - document mapping
 
 if __name__ == "__main__":

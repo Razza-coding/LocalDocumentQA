@@ -1,5 +1,12 @@
 import os
 from typing import Dict, Literal
+import logging
+class _IgnoreUA(logging.Filter):
+    def filter(self, record):
+        return "Using `TRANSFORMERS_CACHE` is deprecated" not in record.getMessage()
+logging.getLogger().addFilter(_IgnoreUA())
+import warnings
+warnings.filterwarnings("ignore", message=r".*Using `TRANSFORMERS_CACHE` is deprecated*")
 
 def set_hf_cache(path: str) -> Dict[Literal["PATH_ROOT", "BASE_CACHE", "DATASET_CACHE", "HUB_CACHE", "TRANSFORMER_CACHE"], str]:
     ''' Set Hugging face download cache file to path, it'll create sub folder: [huggingface, huggingface/datasets, huggingface/hub, huggingface/transformers] to download files '''

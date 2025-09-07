@@ -10,6 +10,7 @@
 **/test_log/*
 **/output/*
 **/temp/*
+**/temp_files/*
 Goals.*
 
 # different version of unused prompt template

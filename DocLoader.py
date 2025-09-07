@@ -1,13 +1,13 @@
+import os, sys
 from langchain_community.document_loaders import TextLoader, Docx2txtLoader, PyPDFLoader, WebBaseLoader, SeleniumURLLoader
 from langchain_community.document_loaders.csv_loader import CSVLoader
 from langchain_core.documents import Document
 from selenium.webdriver.support.ui import WebDriverWait
-import os, sys
 from typing import List
 import rich
 import logging
 import time
-from ChunkingTools import StandAloneFactTextSplitter
+from ChunkingTools import StandAloneSentencesExtractor
 
 '''
 A Tool integrates multiple LangChain Tools to load Documents

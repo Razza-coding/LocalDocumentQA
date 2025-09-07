@@ -176,7 +176,7 @@ def build_translate_subgraph(llm: BaseChatModel, logger: Optional[LogWriter]=Non
 # Test translate graph
 
 if __name__ == "__main__":
-    LLM_model, VecDB = config.init_system()
+    LLM_model = config.init_LLM()
     test_string = '''
     there are approximately between 470,000 and 690,000 African elephants in the wild. 
     Although this estimate only covers about half of the total elephant range, experts do not believe the true figure to be much higher, as it is unlikely that large populations remain to be discovered.
@@ -186,6 +186,11 @@ if __name__ == "__main__":
     '''
 
     TranslaterBot = build_translate_subgraph(LLM_model)
+    
+    trans_lang="繁體中文"
+    for response in TranslaterBot.stream(TranslateInput(input_text=test_string, trans_lang="繁體中文", refine_trans=True, max_refine_trys=3)):
+        CLI_print("Translate Stream", response)
+        CLI_next()
     
     trans_lang="繁體中文"
     response = TranslaterBot.invoke(TranslateInput(input_text=test_string, trans_lang="繁體中文", refine_trans=True, max_refine_trys=3))

@@ -96,6 +96,7 @@ class SystemPromptConfig(BaseModel):
     chat_lang     : Optional[str] = Field(default=default_chat_lang)
     negitive_rule : Optional[str] = Field(default=default_negitive_rule)
     output_format : Optional[str] = Field(default=default_output_format)
+    temperature   : Optional[float] = Field(default=0.8)
 
 system_template = SystemMessagePromptTemplate.from_template(
     (

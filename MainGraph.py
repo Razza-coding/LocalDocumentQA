@@ -49,6 +49,7 @@ class DefaultState(TypedDict):
     user_msg        : List[BaseMessage] # formatted user message
     extra_info_msg  : List[BaseMessage] # stacked extra info from all retriever
     history_messages: Annotated[list[AnyMessage], add_messages] # history saver
+    temperature     : float # llm temperature
 
 def build_main_graph(llm:BaseChatModel, database_manager:VDBManager, debug_logger: Optional[LogWriter]=None, graph_name:str="MainGraph") -> CompiledStateGraph:
     ''' Create a LLM RAG graph (main graph) '''
@@ -97,11 +98,13 @@ def build_main_graph(llm:BaseChatModel, database_manager:VDBManager, debug_logge
         ''' take raw input and make a valid message for system '''
         user_messsage  = get_user_message(UserTemplateInputVar(raw_user_input = state["input"]))
         system_message = get_system_message(state["prompt_config"])
+        temperature = getattr(state["prompt_config"], "temperature") if hasattr(state["prompt_config"], "temperature") else state["prompt_config"].get("temperature", 0.8)
         return {
             "raw_user_input"  : state["input"],
             "system_msg"      : system_message,
             "user_msg"        : user_messsage,
             "extra_info_msg"  : [],
+            "temperature"     : temperature
         }
 
     def info_retrieve_node(state: DefaultState) -> DefaultState:
@@ -150,8 +153,11 @@ def build_main_graph(llm:BaseChatModel, database_manager:VDBManager, debug_logge
             user_message      = state["user_msg"]
         ))
 
+        # temperature from graph setting
+        temperature   = state.get("temperature", 0.8)
+
         # invoke LLM
-        LLM_reply = llm.invoke(input=LLM_input)
+        LLM_reply = llm.bind(options={"temperature": temperature}).invoke(input=LLM_input)
         LLM_reply = to_list_message(LLM_reply)
     
         return {
