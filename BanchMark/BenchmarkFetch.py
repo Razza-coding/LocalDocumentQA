@@ -3,32 +3,36 @@ import os, sys
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(parent_dir)
 from LogWriter import LogWriter, remove_special_symbol
-from HF_download_utils import set_hf_cache
-
-# import AFTER custom path is set
-cache_paths = set_hf_cache("./temp")
+from HFCacheSetting import set_hf_cache
+cache_paths = set_hf_cache("./cache")
 from datasets import load_dataset
 
-# Benchmark 分類與名稱
+'''
+Download Dataset form Hugging Face
+
+Path:
+BenchMark/Dataset/logs/<all_downloaded_data.txt>
+'''
+
+# Benchmark 
 benchmarks = {
-    "資訊抽取": [
+    "knowledge_extract": [
         #{"source" : "HF", "name" : "google/boolq",      "split" : "validation", "sub" : None},
         #{"source" : "HF", "name" : "facebook/belebele", "split" : "test",       "sub" : "eng_Latn"}, 
         #{"source" : "HF", "name" : "facebook/belebele", "split" : "test",       "sub" : "zho_Hant"}, 
         #{"source" : "HF", "name" : "google/xquad",      "split" : "validation", "sub" : "xquad.en"},
         #{"source" : "HF", "name" : "google/xquad",      "split" : "validation", "sub" : "xquad.zh"},
         ],
-    "對話": [
+    "chating": [
         #{"source" : "HF_file", "name" : "socialiqa-train-dev", "split" : "train", "sub" : "dev.jsonl"},
         #{"source" : "HF", "name" : "google-research-datasets/natural_questions", "split" : "validation", "sub" : "default"}
         ],
-    #"常識": ["mmlu", "global_mmlu_lite"],
-    #"推理": ["mbpp", "gsm8k"],
-    #"翻譯": ["wmt14"],  # wmt24++ 暫時以 wmt14 代表
+    #"common_knowledge": ["mmlu", "global_mmlu_lite"],
+    #"logic_thinking": ["mbpp", "gsm8k"],
+    #"translate": ["wmt14"],
     "RAG": [
-        {"source" : "HF", "name" : "rag-datasets/rag-mini-wikipedia", "split" : "passages", "sub" : "text-corpus"}, # RAG 資料集
-        {"source" : "HF", "name" : "rag-datasets/rag-mini-wikipedia", "split" : "test",    "sub" : "question-answer"}, # RAG 問答集
-        {"source" : "HF", "name" : "corbt/all-recipes", "split" : "train", "sub" : None}, # 食譜
+        {"source" : "HF", "name" : "rag-datasets/rag-mini-wikipedia", "split" : "passages", "sub" : "text-corpus"}, # RAG QA
+        {"source" : "HF", "name" : "rag-datasets/rag-mini-wikipedia", "split" : "test",    "sub" : "question-answer"}, # RAG QA
     ]
 }
 

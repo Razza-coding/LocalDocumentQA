@@ -1,27 +1,30 @@
 # Enviroment files
 .vscode/*
+.deepeval/*
 **/__pycache__/*
-*req*
+**/cache/*
+
+# Build files
+**.spec*
+dist/*
+build/*
+generate_requirement.bat
 
 # Datasets / Banchmarks
-**/Dataset/*
+**/Dataset/logs/*
+EvaluationData/*
+EvaluationResult/*
 
 # Logs / Test output / Temp files
+**/log/*
 **/test_log/*
 **/output/*
-**/temp/*
-**/temp_files/*
-Goals.*
 
-# different version of unused prompt template
-unused_prompt_template/*
-
-# Abandoned side features
-old_code/*
+# Abandoned code, prompt template
+Abandoned/*
 
 # Model / Database
 InstallOllama/*
 LocalVB/*
 LocalLLM/*
 LocalLLMModels/*
-**/prebuild_VDB/*

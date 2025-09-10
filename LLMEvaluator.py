@@ -6,7 +6,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langchain.prompts import BasePromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from nltk.translate import meteor_score as nltk_meteor
-from HF_download_utils import set_hf_cache
+from HFCacheSetting import set_hf_cache
 from pydantic import BaseModel, Field
 import os, sys, json, ast
 from typing import *
@@ -14,7 +14,7 @@ import re, math, time
 import rich
 
 # custom HF download path for bert score embeddings
-set_hf_cache("./temp") 
+set_hf_cache("./cache") 
 from datetime import datetime
 from transformers import logging
 logging.set_verbosity_error()
@@ -372,15 +372,16 @@ class GraphEvaluator:
 if __name__ == "__main__":
     # ===============================
     # Load Core Objects
-
+    
     # -------------------------------
     # Load QA file
-    qa_file = r"./prebuild_VDB/mini-wiki_question-answer_1.txt" # example : {'question': 'Was Abraham Lincoln the sixteenth President of the United States?', 'answer': 'yes', 'id': 0}
+    qa_file = r"./PrebuildVDB/mini-wiki_question-answer_ALL.txt" # example : {'question': 'Was Abraham Lincoln the sixteenth President of the United States?', 'answer': 'yes', 'id': 0}
     test_case = TestCaseLoader("QA_Test")
     test_case.load(qa_file)
     for c in test_case.get():
         print(c)
 
+    
     # -------------------------------
     # Init core object
     llm = init_LLM(LLM_temperature=0)
@@ -394,9 +395,9 @@ if __name__ == "__main__":
     # Load database
     dataset_name = "mini-wiki"
     raw_data_file = "./BanchMark/Dataset/logs/20250724_rag-datasets_rag-mini-wikipedia-text-corpus.txt"
-    if not db_manager.load("prebuild_VDB", dataset_name):
+    if not db_manager.load("PrebuildVDB", dataset_name):
         db_manager.load_from_file(raw_data_file)
-        db_manager.save("prebuild_VDB", dataset_name)
+        db_manager.save("PrebuildVDB", dataset_name)
     CLI_print("Vector Database", f"Data amount: {db_manager.amount()}")
 
     # -------------------------------
@@ -444,7 +445,7 @@ if __name__ == "__main__":
     # close test llm
     os.system(f"ollama stop {llm.model}")
     del llm
-
+    
     # -------------------------------
     # init judge llm
     judge_llm = init_LLM(LLM_model_name="gpt-oss:latest", LLM_temperature=0)
@@ -464,5 +465,3 @@ if __name__ == "__main__":
     # close judge llm
     os.system(f"ollama stop {judge_llm.model}")
     del judge_llm
-
-    

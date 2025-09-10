@@ -23,6 +23,10 @@ from CLI_Format import *
 from LogWriter import LogWriter
 from PromptTools import to_list_message, to_message, to_text
 
+'''
+Baseline Graph for LLM Evaluation
+Invoke LLM and return shot result
+'''
 
 # -------------------------------
 # Prompt Template

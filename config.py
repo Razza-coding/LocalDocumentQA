@@ -1,9 +1,9 @@
 from langchain_community.vectorstores import FAISS, DistanceStrategy
 from langchain_community.docstore.in_memory import InMemoryDocstore
-
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_ollama import ChatOllama
 from langchain_core.language_models import BaseChatModel
+from sentence_transformers import SentenceTransformer
 
 import faiss
 
@@ -14,6 +14,10 @@ import rich
 import subprocess
 from pydantic import BaseModel
 from typing import *
+
+'''
+Initialize process and enviroment checking Tools
+'''
 
 def __sys_init_message(build_object_type: str, build_object_name):
     print(f"Build {build_object_type:<10} : {build_object_name:<20} Complete")
@@ -126,6 +130,5 @@ def get_llm_info(llm: str | ChatOllama) -> Dict[str, Union[Dict[str, str], List[
     return info
 
 if __name__ == "__main__":
-    check_model_exists(None)
     LLM_model, VecDB = init_system()
     rich.print(get_llm_info(LLM_model))

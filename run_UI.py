@@ -1,8 +1,10 @@
+from CLI_Format import CLI_print
+CLI_print(message="Initialize DocumentQA")
 import os
 import sys
 "" if os.environ.get("USER_AGENT") is not None else os.environ.update({"USER_AGENT" : "-"})
-from HF_download_utils import set_hf_cache
-set_hf_cache("./temp")
+from HFCacheSetting import set_hf_cache
+set_hf_cache("./cache")
 from datetime import datetime
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                             QHBoxLayout, QTextEdit, QLineEdit, QPushButton, 
@@ -12,7 +14,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QSpacerItem, QMessageBox, QProgressBar, QToolTip,
                             QComboBox, QDialog, QStyle)
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QMimeData, QPoint
-from PyQt5.QtGui import QFont, QTextCursor, QDragEnterEvent, QDropEvent, QPalette, QIntValidator
+from PyQt5.QtGui import QFont, QTextCursor, QDragEnterEvent, QDropEvent, QPalette, QIntValidator, QIcon
 
 from langchain.docstore.document import Document
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, BaseMessage
@@ -34,6 +36,7 @@ from typing import *
 import rich
 import time
 import argparse
+CLI_print(message="Core Initialize Start")
 
 # ===============================
 # parser
@@ -137,10 +140,15 @@ class CoreResource():
         self.llm   = init_LLM(self.model_name)
         self.faiss = init_VecDB()
         # input prompt
-        self.default_prompt_config = SystemPromptConfig(AI_name="JHON", professional_role="專業AI助理", temperature=0.8)
+        self.default_prompt_config = SystemPromptConfig(
+            AI_name="JHON", 
+            professional_role="Professional AI Assistance",
+            chat_lang="English",
+            negitive_rule="(No negitive nules is set.)",
+            temperature=0.8)
         self.prompt_config = self.default_prompt_config.model_copy(deep=True)
         # logger
-        self.debug_logger = LogWriter("UI_DEBUG", "test_log")
+        self.debug_logger = LogWriter("UI_LOG", "log")
         # core langgraph, database
         self.vector_database = VDBManager(self.faiss)
         self.state_graph: CompiledStateGraph = build_main_graph(self.llm, self.vector_database, self.debug_logger)
@@ -219,6 +227,7 @@ class CoreResource():
 # Global Resource is init here
 args = parse_args(sys.argv[1:])
 core = CoreResource(model_name=getattr(args, "model_name"))
+CLI_print(message="Core Initialize Done")
 
 # ===============================
 # Thread Functions
@@ -310,7 +319,7 @@ class ChatMessage(QFrame):
         message_layout.setContentsMargins(0,0,0,0)
 
         # User indicator
-        user_label = QLabel("AI Chat") if not is_human else QLabel("User")
+        user_label = QLabel("AI Chat Bot") if not is_human else QLabel("User")
         user_label.setStyleSheet("color: #8bb8e8; font-size: 18px; font-weight: bold;")
         user_label.setAlignment(Qt.AlignBottom)
         user_label.setContentsMargins(5,5,5,0)
@@ -1749,7 +1758,7 @@ class DocumentQAChat(QMainWindow):
         '''Initial conversation messages'''
         self.add_statue_message("Initialize System")
         QTimer().singleShot(3000, lambda: (
-            self.clear_all_status_message(), self.add_message("你好！今天想聊什麼?", is_human=False, citations=[])
+            self.clear_all_status_message(), self.add_message("Hello! Welcome to DocumentQA.", is_human=False, citations=[])
             ))
     
     def start_check_timer(self, input_text):
@@ -1856,6 +1865,7 @@ class DocumentQAChat(QMainWindow):
 
 
 def main():
+    CLI_print(message="Start UI")
     app = QApplication(sys.argv)
     font = QFont("Microsoft JhengHei", 12)
     app.setFont(font)

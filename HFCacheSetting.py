@@ -10,7 +10,8 @@ warnings.filterwarnings("ignore", message=r".*Using `TRANSFORMERS_CACHE` is depr
 
 def set_hf_cache(path: str) -> Dict[Literal["PATH_ROOT", "BASE_CACHE", "DATASET_CACHE", "HUB_CACHE", "TRANSFORMER_CACHE"], str]:
     ''' Set Hugging face download cache file to path, it'll create sub folder: [huggingface, huggingface/datasets, huggingface/hub, huggingface/transformers] to download files '''
-    assert os.path.isdir(path), f"Invalid folder, please create one: {path}"
+    if not os.path.isdir(path):
+        os.makedirs(path, exist_ok=True)
     PATH_ROOT     = os.path.abspath(path)
     BASE_CACHE    = os.path.join(PATH_ROOT, "huggingface")
     DATASET_CACHE = os.path.join(BASE_CACHE, "datasets")
@@ -34,4 +35,4 @@ def set_hf_cache(path: str) -> Dict[Literal["PATH_ROOT", "BASE_CACHE", "DATASET_
     }
 
 if __name__ == "__main__":
-    print(set_hf_cache("./temp"))
+    print(set_hf_cache("./cache"))

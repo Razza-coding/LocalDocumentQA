@@ -125,7 +125,7 @@ if __name__ == "__main__":
     test_manager.view_data()
     #
     CLI_print("VDB Test", "Load VDB")
-    test_manager.load("prebuild_VDB", "mini-wiki")
+    test_manager.load("PrebuildVDB", "mini-wiki")
     #
     q_1 = "How can beetle larvae be differentiated from other insect larvae?"
     msg = test_manager.retrieve(q_1, 8)
@@ -143,5 +143,5 @@ if __name__ == "__main__":
     CLI_print("VDB Test", msg, "search without score threshold")
     CLI_next()
     # 
-    test_manager.save("prebuild_VDB", index_name="test_VDB")
+    test_manager.save("PrebuildVDB", index_name="test_VDB")
     CLI_print("VDB Test", "All success")

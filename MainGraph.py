@@ -218,9 +218,9 @@ if __name__ == "__main__":
     dataset_name = "mini-wiki"
     raw_data_file = "./BanchMark/Dataset/logs/20250724_rag-datasets_rag-mini-wikipedia-text-corpus.txt"
 
-    if not database_manager.load("prebuild_VDB", dataset_name):
+    if not database_manager.load("PrebuildVDB", dataset_name):
         database_manager.load_from_file(raw_data_file)
-        database_manager.save("prebuild_VDB", dataset_name)
+        database_manager.save("PrebuildVDB", dataset_name)
 
     CLI_print("Vector Database", f"Data amount: {database_manager.amount()}")
 

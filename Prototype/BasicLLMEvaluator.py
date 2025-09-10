@@ -274,7 +274,7 @@ if __name__ == "__main__":
     logger.write_log(log_message="Start Test", message_section="QA test initial stage", add_time=True)
 
     # Load test QA
-    qa_file = r"./prebuild_VDB/mini-wiki_question-answer_100.txt" # example : {'question': 'Was Abraham Lincoln the sixteenth President of the United States?', 'answer': 'yes', 'id': 0}
+    qa_file = r"./PrebuildVDB/mini-wiki_question-answer_100.txt" # example : {'question': 'Was Abraham Lincoln the sixteenth President of the United States?', 'answer': 'yes', 'id': 0}
     qa_pairs = load_test_qa(qa_file, q_key="question", a_key="answer") 
     #
     logger.write_log(log_message=f"QA source file : {qa_file}")
