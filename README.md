@@ -57,6 +57,13 @@ python run_UI.py
 python run_UI.py -n <your_model_name>
 ```
 
+### Run with pre-built exe
+Pre-built exe is provided if you want try DocumentQA without setting up enviroment. Installation of Ollama is still required.  
+[Download Link](https://drive.google.com/file/d/1RMxMoo3vc5IbTxArAio-JRhQsdrBlpBJ/view?usp=drive_link)
+```bash
+DocumentQA.exe -n <your_model_name>
+```
+
 ---
 
 ## Features
