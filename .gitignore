@@ -5,6 +5,7 @@
 **/cache/*
 
 # Build files
+PreBuild/*
 **.spec*
 dist/*
 build/*
